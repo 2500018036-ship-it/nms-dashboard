@@ -184,9 +184,8 @@ class Dashboard:
 
             def limited(self, failures=False):
                 now = time.monotonic(); ip = self.client_address[0]
-                if not failures:
-                    session=owner.sessions.read(owner.sessions.token(self.headers.get('Cookie')))
-                    if session:ip='account:'+session['user']['username']
+                session=owner.sessions.read(owner.sessions.token(self.headers.get('Cookie')))
+                if session:ip='account:'+session['user']['username']
                 with owner.lock:
                     entries = (owner.failures if failures else owner.requests)[ip]
                     while entries and now - entries[0] > 60: entries.popleft()
@@ -204,7 +203,9 @@ class Dashboard:
                 except (ValueError, UnicodeError): return False
 
             def fail_auth(self):
-                with owner.lock: owner.failures[self.client_address[0]].append(time.monotonic())
+                session=owner.sessions.read(owner.sessions.token(self.headers.get('Cookie')))
+                key='account:'+session['user']['username'] if session else self.client_address[0]
+                with owner.lock: owner.failures[key].append(time.monotonic())
                 self.reply(401, {'error': 'authentication_required'})
 
             def do_GET(self):
@@ -221,6 +222,8 @@ class Dashboard:
                         name, mime = files[parsed.path]; return self.reply(200, (static / name).read_bytes(), mime)
                     if parsed.path not in {'/api/status', '/api/history', '/api/events', '/api/devices', '/api/metrics', '/api/services', '/api/health','/api/logs','/api/incidents'} and not parsed.path.startswith(('/api/devices/','/api/incidents/','/api/platform')):
                         return self.reply(404, {'error': 'not_found'})
+                    if parsed.path=='/api/platform/access' and session:
+                        session={**session,'_access_binding':Sessions.digest(owner.sessions.token(self.headers.get('Cookie')))}
                     data = owner.data(parsed.path, query, session)
                     return self.reply(404, {'error': 'not_found'}) if data is None else self.reply(200, data)
                 except Forbidden:return self.reply(403,{'error':'permission_denied'})

@@ -1,0 +1,24 @@
+[Unit]
+Description=THEAZ private browser container broker
+After=docker.service var-lib-theaz_access-sessions.mount
+Requires=docker.service var-lib-theaz_access-sessions.mount
+
+[Service]
+Type=simple
+User=root
+Group=theaz-access
+EnvironmentFile=/etc/theaz_access/broker.env
+ExecStart=/opt/theaz_access/venv/bin/python -m theaz_access.broker
+WorkingDirectory=/opt/theaz_access
+Restart=on-failure
+RestartSec=5
+UMask=0007
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/run/theaz_access /var/lib/theaz_access/sessions
+ReadOnlyPaths=/mnt/data/www/nms-bot/data/platform.sqlite3
+
+[Install]
+WantedBy=multi-user.target

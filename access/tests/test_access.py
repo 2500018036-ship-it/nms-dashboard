@@ -1,0 +1,80 @@
+import asyncio
+from contextlib import closing
+import json
+from pathlib import Path
+import tempfile
+import unittest
+from unittest.mock import AsyncMock, patch
+from aiohttp import web
+from aiohttp.test_utils import TestClient, TestServer
+from theaz_access import egress
+from theaz_access.gateway import Gateway, Session, app
+from theaz_access.policy import check_sid, load, origin, target
+
+CONFIG=Path(__file__).resolve().parents[1]/'targets.json'
+
+
+class PolicyTests(unittest.TestCase):
+    def test_exact_origins_reject_loopback_metadata_userinfo_and_other_ports(self):
+        selected='http://192.168.10.26/'
+        self.assertEqual(egress.destination('GET',selected+'login?q=1',selected),('192.168.10.26',80,'/login?q=1'))
+        for value in ('http://127.0.0.1/','http://169.254.169.254/','http://192.168.10.26:81/','http://192.168.10.27/','http://u:p@192.168.10.26/','https://192.168.10.26/'):
+            with self.subTest(url=value),self.assertRaises(ValueError):egress.destination('GET',value,selected)
+        self.assertEqual(egress.destination('CONNECT','192.168.20.200:8006','https://192.168.20.200:8006/'),('192.168.20.200',8006,None))
+        with self.assertRaises(ValueError):egress.destination('CONNECT','192.168.20.200:22','https://192.168.20.200:8006/')
+
+    def test_config_is_audited_roles_are_restricted_and_ids_are_not_paths(self):
+        config=load(CONFIG)
+        self.assertEqual(len(config['targets']),7)
+        self.assertEqual(config['max_sessions'],1)
+        self.assertNotIn('Viewer',target(config,'portainer')['roles'])
+        for value in ('../docker.sock','a'*31,'a'*33,'../../'):
+            with self.assertRaises(ValueError):check_sid(value)
+        with self.assertRaises(KeyError):target(config,'missing')
+        for value in ('http://169.254.169.254/','http://127.0.0.1/','http://user:pass@192.168.20.1/'):
+            with self.assertRaises(ValueError):origin(value)
+
+
+class GatewayTests(unittest.IsolatedAsyncioTestCase):
+    async def asyncSetUp(self):
+        self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name)
+        self.gateway=Gateway(load(CONFIG),self.root,self.root/'audit.sqlite3','http://auth','/unused')
+        application=app(self.gateway);application.cleanup_ctx.clear()
+        self.client=TestClient(TestServer(application));await self.client.start_server()
+        self.owner={'enabled':True,'user':{'username':'admin','role':'Administrator'},'binding':'owner-binding','expires_at':9999999999,'targets':[]}
+        self.gateway.auth=AsyncMock(return_value=self.owner)
+        self.gateway.control=AsyncMock(return_value={'expires':9999999999,'url':'http://192.168.20.1/'})
+        self.headers={'Cookie':'nms_session=opaque','Origin':self.gateway.config['public_origin']}
+
+    async def asyncTearDown(self):
+        for item in self.gateway.sessions.values():
+            item.proxy.close();await item.proxy.wait_closed()
+        await self.client.close()
+        import gc;gc.collect()
+        self.tmp.cleanup()
+
+    async def test_mutation_and_websocket_reject_foreign_or_missing_origin(self):
+        for headers in ({},{'Origin':'https://evil.test'}):
+            r=await self.client.post('/access-api/sessions',json={'target':'mikrotik'},headers=headers)
+            self.assertEqual(r.status,403)
+        self.gateway.control.assert_not_called()
+
+    async def test_owner_binding_blocks_another_login_and_revoked_auth(self):
+        identity='a'*32
+        self.gateway.sessions[identity]=Session(identity,'mikrotik','admin','another-binding',0,9999999999,9999999999,'cookie',None)
+        r=await self.client.get('/access-api/sessions/'+identity,headers=self.headers)
+        self.assertEqual(r.status,403)
+        self.gateway.sessions.clear()
+        self.gateway.auth=AsyncMock(side_effect=web.HTTPUnauthorized())
+        r=await self.client.get('/access-api/catalog',headers=self.headers)
+        self.assertEqual(r.status,401)
+
+    async def test_audit_has_lifecycle_metadata_without_cookie_or_password(self):
+        self.gateway.record('admin','mikrotik','b'*32,'access.started')
+        r=await self.client.get('/access-api/audit',headers=self.headers)
+        payload=await r.json();text=json.dumps(payload)
+        self.assertEqual(payload['items'][0]['event'],'access.started')
+        self.assertNotIn('cookie',text);self.assertNotIn('password',text)
+        self.owner['user']['role']='Network Administrator'
+        r=await self.client.get('/access-api/audit',headers=self.headers)
+        self.assertEqual(r.status,403)

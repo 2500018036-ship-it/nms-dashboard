@@ -1,0 +1,12 @@
+[Unit]
+Description=Ephemeral THEAZ browser profiles and Unix channels
+Before=theaz-access-broker.service
+
+[Mount]
+What=tmpfs
+Where=/var/lib/theaz_access/sessions
+Type=tmpfs
+Options=size=512M,uid=31000,gid=31000,mode=0700,nosuid,nodev,noexec
+
+[Install]
+WantedBy=multi-user.target

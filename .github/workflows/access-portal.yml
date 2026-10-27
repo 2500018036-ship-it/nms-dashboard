@@ -1,0 +1,39 @@
+name: Access portal review checks
+on:
+  push:
+    branches: [feat/centralized-access-portal]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22', cache: npm}
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Access API and security regression tests
+        run: |
+          python3 -m venv /tmp/access-tests
+          /tmp/access-tests/bin/pip install -r access/requirements.txt
+          PYTHONPATH=access /tmp/access-tests/bin/python -m unittest discover -s access/tests -p 'test_*.py' -v
+          docker build --target test -t nms-backend-tests ./backend
+          docker run --rm --network none nms-backend-tests
+      - name: Build private gateway and sandboxed browser
+        run: |
+          docker build -t theaz-access-gateway:test ./access
+          docker build -f access/worker/Dockerfile -t theaz-access-worker:test ./access
+      - name: Verify native redirects, cookies, WebSocket and display with real Chromium
+        run: sudo env PYTHONPATH=access /tmp/access-tests/bin/python access/tests/smoke_worker.py
+      - name: Package reviewed browser images
+        run: docker save theaz-access-gateway:test theaz-access-worker:test | gzip -1 > theaz-access-review-images.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: theaz-access-review-images
+          path: theaz-access-review-images.tar.gz
+          retention-days: 7

@@ -1,0 +1,40 @@
+services:
+  access:
+    image: ${NMS_ACCESS_GATEWAY_IMAGE:?Set the reviewed gateway image}
+    container_name: nms-access
+    restart: unless-stopped
+    user: "31000:31000"
+    read_only: true
+    init: true
+    environment:
+      ACCESS_CONFIG: /etc/access/targets.json
+      ACCESS_SESSIONS: /var/lib/access/sessions
+      ACCESS_AUDIT_DB: /var/lib/access/audit/access.sqlite3
+      ACCESS_BROKER_SOCKET: /run/access/broker.sock
+      ACCESS_AUTH_URL: http://nms-bot:8765/api/platform/access
+    volumes:
+      - /etc/theaz_access/targets.json:/etc/access/targets.json:ro
+      - /var/lib/theaz_access/sessions:/var/lib/access/sessions
+      - /var/lib/theaz_access/audit:/var/lib/access/audit
+      - /run/theaz_access:/run/access:ro
+    ports:
+      - "127.0.0.1:18083:8081"
+    networks:
+      web-proxy:
+        aliases: [nms-access]
+      nms-backend:
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    tmpfs: [/tmp:size=16m,noexec,nosuid]
+    mem_limit: 192m
+    cpus: 0.25
+    pids_limit: 64
+    logging:
+      driver: json-file
+      options: {max-size: "5m", max-file: "2"}
+networks:
+  web-proxy:
+    external: true
+  nms-backend:
+    external: true
+    name: nms-bot_default

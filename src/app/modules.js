@@ -1,5 +1,6 @@
 export const modules = [
   { id: 'overview', path: '/', title: 'Overview', icon: 'grid-1x2', group: 'Workspace', description: 'Satu tempat untuk memahami kondisi infrastruktur homelab.' },
+  { id: 'access', path: '/access', title: 'Centralized Access Portal', navTitle: 'Access Portal', icon: 'window-stack', group: 'Workspace', description: 'GUI asli perangkat dan layanan di area NMS melalui sesi akses privat.' },
   { id: 'network', path: '/network', title: 'Network Monitoring', icon: 'activity', group: 'Workspace', description: 'Interface, trafik, routing, dan konektivitas VPN.' },
   { id: 'servers', path: '/servers', title: 'Servers & Services', icon: 'hdd-stack', group: 'Workspace', description: 'Resource host, container, virtual machine, dan layanan.' },
   { id: 'topology', path: '/topology', title: 'Topology', icon: 'diagram-3', group: 'Workspace', description: 'Hubungan antarperangkat berdasarkan data topologi yang terverifikasi.' },
