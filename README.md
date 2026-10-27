@@ -1,4 +1,4 @@
-> Pembaruan terbaru: frontend0.6.0/backend1.3.0. Lihat [laporan Advanced NMS 27 Oktober](docs/ADVANCED-PLATFORM-2026-10-27.md) untuk pendaftaran collector, topologi/inventaris, RouterOS, role dan perubahan terkonfirmasi. Proxmox tetap monitoring sesuai keputusan pengguna.
+> Pembaruan terbaru: frontend0.6.0/backend1.3.1. Lihat [laporan Advanced NMS 27 Oktober](docs/ADVANCED-PLATFORM-2026-10-27.md) untuk pendaftaran collector, topologi/inventaris, RouterOS, role dan perubahan terkonfirmasi. Proxmox tetap monitoring sesuai keputusan pengguna.
 
 # Unified NMS Homelab Dashboard
 
@@ -53,3 +53,5 @@ Verifikasi24 Oktober:66 tes frontend,244 tes backend, lint dan build lulus. Peri
 - `docs`: laporan fase sebelumnya (historis), kontrak integrasi dan laporan Unified terbaru.
 
 Panduan transport awal: [API-INTEGRATION.md](docs/API-INTEGRATION.md). Dokumen Phase3/4 adalah catatan historis; endpoint dan kemampuan yang kini aktif mengikuti laporan Unified terbaru. Inventaris metadata tidak otomatis memasang collector API/SNMP dan tidak mengubah perangkat fisik.
+
+Perbaikan pendaftaran, kelengkapan Device Management, penghapusan dan pelacakan DHCP: [catatan stabilitas perangkat](docs/DEVICE-STABILITY-2026-10-27.md). Backend ikut diuji dan di-deploy dari direktori `backend/`.

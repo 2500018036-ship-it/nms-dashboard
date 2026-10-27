@@ -1,0 +1,10 @@
+.env
+.env.*
+!.env.example
+data/
+backups/
+__pycache__/
+*.pyc
+*.log
+*.bak*
+*.before-*

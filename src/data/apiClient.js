@@ -11,7 +11,8 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
     const abort = () => controller.abort()
     if (signal?.aborted) abort()
     signal?.addEventListener('abort', abort, { once: true })
-    const timer = setTimeout(() => { timedOut = true; controller.abort() }, timeoutMs)
+    const requestTimeout = /^\/api\/platform\/inventory\/inv_[a-f0-9]{24}\/test$/.test(path) ? Math.max(timeoutMs, 40000) : timeoutMs
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, requestTimeout)
     try {
       const response = await fetcher(`${config.base}${path}`, {
         method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', signal: controller.signal,
@@ -23,11 +24,11 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
         throw new ApiError(path === '/api/auth/login' ? 'invalid_credentials' : 'auth_required')
       }
       if (response.status === 403) throw new ApiError('permission_denied')
-      if (response.status === 400) throw new ApiError('validation_failed')
+      const validation = response.status === 400
       if (response.status === 409) throw new ApiError('revision_conflict')
       if (response.status === 429) throw new ApiError('rate_limited')
       if (response.status === 404) throw new ApiError('not_found')
-      if (!response.ok) throw new ApiError('unavailable')
+      if (!response.ok && !validation) throw new ApiError('unavailable')
       if (!response.headers.get('content-type')?.includes('application/json')) throw new ApiError('invalid_response')
       const maxBytes = 2 * 1024 * 1024
       if (Number(response.headers.get('content-length')) > maxBytes) throw new ApiError('response_too_large')
@@ -45,8 +46,11 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
       } finally { reader.releaseLock() }
       const bytes = new Uint8Array(length); let offset = 0
       for (const chunk of chunks) { bytes.set(chunk, offset); offset += chunk.byteLength }
-      try { return JSON.parse(new TextDecoder().decode(bytes)) }
-      catch { throw new ApiError('invalid_response') }
+      let parsed
+      try { parsed = JSON.parse(new TextDecoder().decode(bytes)) }
+      catch { throw new ApiError(validation ? 'validation_failed' : 'invalid_response') }
+      if (validation) throw new ApiError(Object.hasOwn(errorMessages, parsed.code) ? parsed.code : 'validation_failed')
+      return parsed
     } catch (error) {
       if (error instanceof ApiError) throw error
       throw new ApiError(timedOut ? 'timeout' : controller.signal.aborted ? 'cancelled' : 'unavailable')
@@ -100,10 +104,19 @@ export const errorMessages = {
   invalid_response: 'Format respons API belum sesuai', response_too_large: 'Respons API melewati batas aman',
   invalid_credentials: 'Username atau password tidak sesuai.',
   target_not_allowed: 'Target riwayat tidak diizinkan', cancelled: 'Permintaan dibatalkan',
-  invalid_filter: 'Filter waktu tidak valid. Gunakan waktu WIB, urutan awal–akhir yang benar, dan rentang log maksimum 31 hari.',
+  invalid_filter: 'Filter waktu tidak valid. Gunakan waktu WIB, urutan awalâ€“akhir yang benar, dan rentang log maksimum 31 hari.',
   ai_unavailable: 'Provider AI belum dapat menyelesaikan jawaban. Monitoring dan notifikasi tetap berjalan.',
   permission_denied: 'Role akun ini tidak mengizinkan tindakan tersebut.',
   credential_vault_unavailable: 'Vault kredensial belum siap atau kunci server tidak valid. Kredensial tidak dibaca atau disimpan.',
+  host_not_allowed: 'Alamat ini belum diizinkan untuk monitoring. Centang izin alamat saat mendaftarkan perangkat atau minta Administrator menambahkannya.',
+  invalid_mac_address: 'MAC harus berformat AA:BB:CC:DD:EE:FF.',
+  invalid_dhcp_tracking: 'Pelacakan DHCP memerlukan MAC perangkat dan metode ICMP.',
+  referenced_by_topology: 'Perangkat masih digunakan oleh topologi. Izinkan pelepasan tautan ketika menghapus.',
+  monitor_limit: 'Batas perangkat monitoring aktif tercapai. Nonaktifkan perangkat yang tidak digunakan.',
+  credential_host_mismatch: 'Referensi credential tidak cocok dengan alamat perangkat yang dikonfigurasi di server.',
+  duplicate_host: 'Alamat sudah terdaftar. Edit perangkat yang ada.',
+  invalid_number: 'Nilai interval atau port berada di luar batas yang diizinkan.',
+  invalid_host: 'Alamat perangkat tidak valid. Gunakan alamat IP atau hostname tanpa URL dan port.',
   validation_failed: 'Konfigurasi ditolak server. Periksa field wajib, host yang diizinkan, format, dan batas nilai.',
   revision_conflict: 'Data sudah berubah di server atau alamat duplikat. Muat ulang sebelum menyimpan kembali.',
   not_found: 'Data atau endpoint tidak ditemukan',

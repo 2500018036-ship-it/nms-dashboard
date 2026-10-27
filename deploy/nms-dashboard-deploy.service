@@ -7,7 +7,7 @@ Requires=docker.service
 [Service]
 Type=oneshot
 ExecStart=/usr/local/sbin/nms-dashboard-pull-release
-TimeoutStartSec=15min
+TimeoutStartSec=25min
 UMask=0077
 NoNewPrivileges=true
 PrivateTmp=true

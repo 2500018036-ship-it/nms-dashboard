@@ -1,5 +1,5 @@
 export const deviceTypes = ['router', 'switch', 'server', 'hypervisor', 'container-host', 'dns', 'vpn', 'service', 'access-point','firewall','iot','generic','other']
-export const methods = ['icmp', 'snmp', 'api', 'agent', 'http', 'dns']
+export const methods = ['icmp', 'tcp', 'snmp', 'api', 'agent', 'http', 'dns']
 export const profiles = {
   connectivity: { label: 'Connectivity', metrics: ['Availability', 'Latency', 'Packet loss jika tersedia'] },
   network: { label: 'Network interfaces', metrics: ['Interface', 'RX/TX', 'Utilisasi', 'Error/drop jika tersedia'] },
@@ -8,7 +8,7 @@ export const profiles = {
   services: { label: 'Service health', metrics: ['HTTP/DNS/API availability', 'Response time'] },
   custom: { label: 'Custom / capability-based', metrics: ['Metrik mengikuti kemampuan collector'] },
 }
-const allowed = new Set(['id', 'name', 'host', 'type', 'vendor', 'model', 'methods', 'interval', 'group', 'tags', 'profile', 'enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query'])
+const allowed = new Set(['id', 'name', 'host', 'type', 'vendor', 'model', 'methods', 'interval', 'group', 'tags', 'profile', 'enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp'])
 const clean = (v) => typeof v === 'string' ? v.trim() : ''
 export class DeviceError extends Error {
   constructor(code, errors = {}) { super(code); this.code = code; this.errors = errors }
@@ -40,7 +40,7 @@ export function validateDevice(input, existing = [], editingId = null) {
   if (existing.some((d) => d.id !== editingId && d.host === value.host)) errors.host = 'Alamat sudah digunakan oleh perangkat lain.'
   if (!deviceTypes.includes(value.type)) errors.type = 'Pilih tipe perangkat.'
   if (!value.methods.length || value.methods.some((m) => !methods.includes(m))) errors.methods = 'Pilih minimal satu metode monitoring yang tersedia.'
-  if (!Number.isInteger(value.interval) || value.interval < 15 || value.interval > 86400) errors.interval = 'Interval harus bilangan bulat 15–86400 detik.'
+  if (!Number.isInteger(value.interval) || value.interval < 15 || value.interval > 86400) errors.interval = 'Interval harus bilangan bulat 15â€“86400 detik.'
   if (typeof value.profile !== 'string' || !Object.hasOwn(profiles, value.profile)) errors.profile = 'Pilih profil monitoring.'
   if (value.vendor.length > 80 || value.model.length > 80) errors.vendor = 'Vendor/model maksimum 80 karakter.'
   if (value.group.length > 48) errors.group = 'Grup maksimum 48 karakter.'
@@ -49,7 +49,10 @@ export function validateDevice(input, existing = [], editingId = null) {
   if (Array.isArray(input.tags) && input.tags.some((v) => typeof v !== 'string')) errors.tags = 'Setiap tag harus berupa teks.'
   for (const key of ['id', 'vendor', 'model', 'group']) if (input[key] !== undefined && typeof input[key] !== 'string') errors[key] = 'Field harus berupa teks.'
   if (input.enabled !== undefined && typeof input.enabled !== 'boolean') errors.enabled = 'Status aktif harus boolean.'
-  for(const key of ['location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query']) if(input[key]!==undefined)value[key]=input[key]
+  for(const key of ['location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp']) if(input[key]!==undefined)value[key]=input[key]
+  if (value.mac_address !== undefined && (typeof value.mac_address !== 'string' || value.mac_address && !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(value.mac_address))) errors.mac_address = 'Gunakan MAC dengan format AA:BB:CC:DD:EE:FF.'
+  if (value.follow_dhcp !== undefined && typeof value.follow_dhcp !== 'boolean') errors.follow_dhcp = 'Pilihan DHCP tidak valid.'
+  if (value.follow_dhcp && (!value.mac_address || value.monitor_method !== 'icmp')) errors.mac_address = 'Pelacakan DHCP memerlukan MAC dan metode ICMP.'
   return { errors, value: Object.keys(errors).length ? null : value }
 }
 export function validatedDevice(input, existing = [], editingId = null) {
@@ -82,8 +85,8 @@ export function validateScope(value) {
 export const deviceErrorMessage = (error) => ({
   backend_not_integrated: 'Operasi belum terintegrasi dengan backend. Tidak ada perubahan perangkat.',
   validation_failed: 'Konfigurasi belum valid. Periksa field yang ditandai.',
-  invalid_json: 'JSON tidak valid.', invalid_inventory: 'Gunakan schemaVersion 1 dan 1–200 perangkat.',
+  invalid_json: 'JSON tidak valid.', invalid_inventory: 'Gunakan schemaVersion 1 dan 1â€“200 perangkat.',
   import_too_large: 'Ukuran import maksimum 256 KiB.', duplicate_id: 'ID perangkat duplikat.',
-  not_found: 'Perangkat tidak ditemukan.', invalid_scope: 'Gunakan subnet IPv4 /24–/32 untuk rancangan discovery ini.',
+  not_found: 'Perangkat tidak ditemukan.', invalid_scope: 'Gunakan subnet IPv4 /24â€“/32 untuk rancangan discovery ini.',
   invalid_note: 'Catatan maksimum 300 karakter.',
 }[error.code] || 'Operasi belum dapat diselesaikan.')

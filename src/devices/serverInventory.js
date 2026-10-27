@@ -1,5 +1,5 @@
 import { newDevice, parseInventory, validatedDevice, validateScope } from './model.js'
-export const inventoryValue = (d) => Object.fromEntries(Object.entries(d).filter(([k]) => ['name','host','type','vendor','model','methods','interval','group','tags','profile','enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query'].includes(k)))
+export const inventoryValue = (d) => Object.fromEntries(Object.entries(d).filter(([k]) => ['name','host','type','vendor','model','methods','interval','group','tags','profile','enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp'].includes(k)))
 export function serverInventory(platform,observed,snapshot) {
   const current = () => platform.inventory.map((d)=>({...inventoryValue(d),id:d.id}))
   const item = (id) => platform.inventory.find((d)=>d.id===id)

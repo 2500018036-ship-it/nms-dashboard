@@ -1,0 +1,40 @@
+services:
+  nms-bot:
+    build:
+      context: .
+      target: production
+    image: nms-bot:local
+    container_name: nms-bot
+    restart: unless-stopped
+    init: true
+    env_file:
+      - .env
+    environment:
+      TZ: Asia/Jakarta
+    read_only: true
+    tmpfs:
+      - /tmp:size=16m,noexec,nosuid
+    volumes:
+      - ./data:/data
+      - /var/lib/nms-collector:/collector:ro
+    ports:
+      - "127.0.0.1:8765:8765"
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 256m
+    cpus: 0.75
+    stop_grace_period: 30s
+    healthcheck:
+      test: ["CMD", "python", "-c", "from app.main import healthcheck; raise SystemExit(0 if healthcheck() else 1)"]
+      interval: 30s
+      timeout: 10s
+      start_period: 90s
+      retries: 3
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"

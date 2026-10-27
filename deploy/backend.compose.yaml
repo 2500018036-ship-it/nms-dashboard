@@ -1,0 +1,5 @@
+# Keep the existing Compose project, credentials, data and collector mounts.
+# This file only replaces the image with the exact image built by CI.
+services:
+  nms-bot:
+    image: ${NMS_BACKEND_IMAGE:?Set NMS_BACKEND_IMAGE to the tested backend image}

@@ -33,7 +33,7 @@ export function MonitoringProvider({ children }) {
   useEffect(() => { const timer = setInterval(() => setNow(Date.now() / 1000), 15000); const startup = setTimeout(refresh, 0)
     return () => { clearInterval(timer); clearTimeout(startup); active.current?.abort(); active.current = null } }, [refresh])
   useEffect(() => {
-    if (!config.enabled || connection.status === 'loading' || ['auth_required', 'rate_limited'].includes(connection.error) || ['auth_required', 'rate_limited'].includes(connection.eventsError)) return
+    if (!config.enabled || connection.status === 'loading' || connection.error === 'auth_required' || connection.eventsError === 'auth_required') return
     const timer = setTimeout(refresh, connection.status === 'error' ? 60000 : Math.max(30000, Math.min(300000, (snapshot.interval || 30) * 1000)))
     return () => clearTimeout(timer)
   }, [connection, snapshot.interval, refresh])

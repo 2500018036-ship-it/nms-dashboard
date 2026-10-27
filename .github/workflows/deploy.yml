@@ -28,8 +28,18 @@ jobs:
       - run: npm test
       - run: npm run build
 
+  backend-test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build and run backend regression tests
+        run: |
+          docker build --target test -t nms-backend-tests ./backend
+          docker run --rm --network none nms-backend-tests
+
   publish:
-    needs: test
+    needs: [test, backend-test]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -40,7 +50,9 @@ jobs:
       - name: Build production Docker image
         env:
           REVISION: ${{ github.sha }}
-        run: docker build --build-arg "VCS_REF=$REVISION" -t "nms-dashboard:$REVISION" .
+        run: |
+          docker build --build-arg "VCS_REF=$REVISION" -t "nms-dashboard:$REVISION" .
+          docker build --target production --build-arg "VCS_REF=$REVISION" -t "nms-backend:$REVISION" ./backend
       - name: Smoke test production container
         env:
           REVISION: ${{ github.sha }}
@@ -60,9 +72,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REVISION: ${{ github.sha }}
         run: |
-          docker save "nms-dashboard:$REVISION" | gzip -1 > nms-dashboard-image.tar.gz
+          docker save "nms-dashboard:$REVISION" "nms-backend:$REVISION" | gzip -1 > nms-dashboard-image.tar.gz
           CHECKSUM=$(sha256sum nms-dashboard-image.tar.gz | cut -d ' ' -f 1)
-          jq -n --arg revision "$REVISION" --arg checksum "$CHECKSUM" '{revision:$revision,sha256:$checksum}' > deployment.json
+          jq -n --arg revision "$REVISION" --arg checksum "$CHECKSUM" '{revision:$revision,sha256:$checksum,backend:true}' > deployment.json
           TAG="deploy-$REVISION"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --latest

@@ -1,0 +1,61 @@
+{
+  "switch": {
+    "name": "Cisco SF200-24",
+    "uplinks": [
+      "ether3",
+      "ether4"
+    ],
+    "management_host": "192.168.10.26"
+  },
+  "devices": {
+    "host_mikrotik": {
+      "name": "MikroTik gateway",
+      "host": "192.168.20.1",
+      "alert_on_unreachable": true
+    },
+    "host_debian": {
+      "name": "Debian Docker server",
+      "host": "192.168.20.195",
+      "alert_on_unreachable": true
+    },
+    "host_proxmox": {
+      "name": "Proxmox node (ICMP)",
+      "host": "192.168.20.200",
+      "alert_on_unreachable": true
+    },
+    "host_dns": {
+      "name": "Technitium host (ICMP)",
+      "host": "192.168.20.199",
+      "alert_on_unreachable": true
+    },
+    "gateway_upstream": {
+      "name": "Gateway upstream hasil audit route",
+      "host": "192.168.18.1",
+      "alert_on_unreachable": true
+    },
+    "management_theaz": {
+      "name": "THEAZ (DHCP management)",
+      "host": "192.168.10.200",
+      "alert_on_unreachable": false
+    },
+    "client_tlwr820n": {
+      "name": "TLWR820N (DHCP)",
+      "host": "192.168.30.194",
+      "alert_on_unreachable": true,
+      "mac_address": "20:E1:5D:91:53:DC",
+      "follow_dhcp": true
+    },
+    "client_ajilll": {
+      "name": "ajilll (DHCP)",
+      "host": "192.168.30.195",
+      "alert_on_unreachable": false,
+      "mac_address": "1E:EA:0A:BD:18:6F",
+      "follow_dhcp": true
+    },
+    "client_iphone": {
+      "name": "iPhone (DHCP)",
+      "host": "192.168.30.196",
+      "alert_on_unreachable": false
+    }
+  }
+}

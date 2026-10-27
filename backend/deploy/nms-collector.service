@@ -1,0 +1,25 @@
+[Unit]
+Description=NMS restricted Docker and host snapshot collector
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /usr/local/lib/nms-collector/host_collector.py
+User=root
+Group=root
+UMask=0022
+TimeoutStartSec=55
+Nice=10
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+ProtectKernelModules=yes
+ReadWritePaths=/var/lib/nms-collector
+RestrictAddressFamilies=AF_UNIX
+CapabilityBoundingSet=
+LockPersonality=yes
+
