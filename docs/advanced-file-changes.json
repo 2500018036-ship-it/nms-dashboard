@@ -1,0 +1,49 @@
+{
+  "template_files": 159,
+  "template_unchanged": true,
+  "frontend_changed": [
+    "src/app/modules.js",
+    "src/app/router.jsx",
+    "src/data/apiClient.js",
+    "src/data/authModel.js",
+    "src/devices/model.js",
+    "src/devices/serverInventory.js",
+    "src/pages/DevicesPage.jsx",
+    "src/pages/LoginPage.jsx",
+    "src/pages/TopologyEditor.jsx",
+    "src/pages/UsersPage.jsx",
+    "src/components/layout/AppLayout.jsx",
+    "config/devProxy.js",
+    "tests/data-layer.test.js"
+  ],
+  "frontend_added": [
+    "src/data/topologyModel.js",
+    "src/pages/ManagementPage.jsx",
+    "src/pages/RouterOSReadPanel.jsx",
+    "tests/management.test.js"
+  ],
+  "backend_changed": [
+    "app/__init__.py",
+    "app/alerts/engine.py",
+    "app/dashboard/models.py",
+    "app/dashboard/platform.py",
+    "app/dashboard/platform_api.py",
+    "app/dashboard/server.py",
+    "app/monitoring/interface_events.py",
+    "app/monitoring/mikrotik.py",
+    "app/services/health.py",
+    "app/storage/database.py",
+    "tests/test_continuous.py",
+    "tests/test_mikrotik.py",
+    "tests/test_platform.py"
+  ],
+  "backend_added": [
+    "app/dashboard/permissions.py",
+    "app/management/adapters.py",
+    "app/management/service.py",
+    "app/management/__init__.py",
+    "app/monitoring/inventory.py",
+    "tests/test_management.py"
+  ],
+  "dashboard_credentials_absent_from_source_and_bundle": true
+}

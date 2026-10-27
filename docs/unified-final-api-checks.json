@@ -1,0 +1,87 @@
+{
+  "at": 1792824175.079389,
+  "checks": [
+    {
+      "name": "live_health_and_telegram_poller",
+      "status": "PASS",
+      "detail": "1.2.0"
+    },
+    {
+      "name": "persistent_settings_applied",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "proxmox_live_after_final_deploy",
+      "status": "PASS",
+      "detail": {
+        "version": {
+          "version": "9.2.2",
+          "release": "9.2"
+        },
+        "nodes": 1,
+        "guests": 2,
+        "storage": 3
+      }
+    },
+    {
+      "name": "actual_sanitized_application_logs",
+      "status": "PASS",
+      "detail": {
+        "total": 127,
+        "sources": [
+          "app.monitoring.mikrotik",
+          "app.services.scheduler"
+        ]
+      }
+    },
+    {
+      "name": "application_log_filters",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "application_log_validation",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "embedding_respects_actual_device_headers",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "scheduled_http_services_fresh",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "qemu_missing_filesystem_usage_not_fabricated",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "all_temporary_ui_and_api_config_cleaned",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "viewer_permissions_and_session_survive_403",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "session_revoked_on_logout",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "mikrotik_readonly_gate",
+      "status": "BLOCKED",
+      "detail": {
+        "status": "UNKNOWN",
+        "error": "excessive_or_unverified_permissions"
+      }
+    }
+  ]
+}

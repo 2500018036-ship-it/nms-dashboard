@@ -1,0 +1,210 @@
+{
+  "routes": [
+    {
+      "menu": "Network Monitoring",
+      "heading": "Network Monitoring"
+    },
+    {
+      "menu": "Servers & Services",
+      "heading": "Servers & Services"
+    },
+    {
+      "menu": "Topology",
+      "heading": "Topology"
+    },
+    {
+      "menu": "Devices & Discovery",
+      "heading": "Device Management & Auto-Discovery"
+    },
+    {
+      "menu": "Alerts & Incidents",
+      "heading": "Alerts & Incidents"
+    },
+    {
+      "menu": "AI NMS Assistant",
+      "heading": "AI NMS Assistant"
+    },
+    {
+      "menu": "Logs & Log Monitoring",
+      "heading": "Logs & Log Monitoring"
+    },
+    {
+      "menu": "Reports & History",
+      "heading": "Reports & History"
+    },
+    {
+      "menu": "NMS System Health",
+      "heading": "NMS System Health"
+    },
+    {
+      "menu": "System Settings",
+      "heading": "System Settings"
+    },
+    {
+      "menu": "Integrations",
+      "heading": "Integrations & Credentials"
+    },
+    {
+      "menu": "Users & Audit Logs",
+      "heading": "Users & Audit Logs"
+    },
+    {
+      "menu": "Overview",
+      "heading": "Overview"
+    }
+  ],
+  "responsive": [
+    {
+      "menu": "Network Monitoring",
+      "heading": "Network Monitoring",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Servers & Services",
+      "heading": "Servers & Services",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Topology",
+      "heading": "Topology",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Devices & Discovery",
+      "heading": "Device Management & Auto-Discovery",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Alerts & Incidents",
+      "heading": "Alerts & Incidents",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "AI NMS Assistant",
+      "heading": "AI NMS Assistant",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Logs & Log Monitoring",
+      "heading": "Logs & Log Monitoring",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Reports & History",
+      "heading": "Reports & History",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "NMS System Health",
+      "heading": "NMS System Health",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "System Settings",
+      "heading": "System Settings",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Integrations",
+      "heading": "Integrations & Credentials",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Users & Audit Logs",
+      "heading": "Users & Audit Logs",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    },
+    {
+      "menu": "Overview",
+      "heading": "Overview",
+      "geometry": {
+        "contentWidth": 686,
+        "scrollWidth": 686,
+        "width": 701
+      }
+    }
+  ],
+  "narrowPages": [
+    {
+      "heading": "Network Monitoring",
+      "geometry": {
+        "contentWidth": 360,
+        "scrollWidth": 360,
+        "width": 375
+      }
+    },
+    {
+      "heading": "Device Management & Auto-Discovery",
+      "geometry": {
+        "contentWidth": 360,
+        "scrollWidth": 360,
+        "width": 375
+      }
+    },
+    {
+      "heading": "Integrations & Credentials",
+      "geometry": {
+        "contentWidth": 360,
+        "scrollWidth": 360,
+        "width": 375
+      }
+    }
+  ],
+  "checks": {
+    "search": true,
+    "themeLightAndDark": true,
+    "sidebarCollapse": true,
+    "networkTab": true,
+    "deviceFilter": true,
+    "discoveryDisabled": true,
+    "notFound": true
+  }
+}

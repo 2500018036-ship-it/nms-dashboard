@@ -1,0 +1,97 @@
+name: Test, build and deploy
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nms-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
+        with:
+          node-version: '22'
+          cache: npm
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+
+  publish:
+    needs: test
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Build production Docker image
+        env:
+          REVISION: ${{ github.sha }}
+        run: docker build --build-arg "VCS_REF=$REVISION" -t "nms-dashboard:$REVISION" .
+      - name: Smoke test production container
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          docker run -d --name smoke --read-only --tmpfs /tmp:size=32m --cap-drop ALL --security-opt no-new-privileges --publish 127.0.0.1:18082:8080 "nms-dashboard:$REVISION"
+          trap 'docker logs smoke; docker rm -f smoke' EXIT
+          for attempt in $(seq 1 20); do
+            if curl --fail --silent http://127.0.0.1:18082/healthz; then break; fi
+            sleep 2
+          done
+          curl --fail --silent http://127.0.0.1:18082/healthz
+          curl --fail --silent http://127.0.0.1:18082/deployment.json | jq -e --arg sha "$REVISION" '.revision == $sha'
+          curl --fail --silent http://127.0.0.1:18082/login | grep -q '<div id="root">'
+          test "$(curl --silent --output /dev/null --write-out '%{http_code}' -X POST -H 'Origin: https://untrusted.example' http://127.0.0.1:18082/nms-api/api/auth/login)" = 403
+      - name: Publish immutable deployment release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ github.sha }}
+        run: |
+          docker save "nms-dashboard:$REVISION" | gzip -1 > nms-dashboard-image.tar.gz
+          CHECKSUM=$(sha256sum nms-dashboard-image.tar.gz | cut -d ' ' -f 1)
+          jq -n --arg revision "$REVISION" --arg checksum "$CHECKSUM" '{revision:$revision,sha256:$checksum}' > deployment.json
+          TAG="deploy-$REVISION"
+          if gh release view "$TAG" >/dev/null 2>&1; then
+            gh release upload "$TAG" nms-dashboard-image.tar.gz deployment.json --clobber
+            gh release edit "$TAG" --latest
+          else
+            gh release create "$TAG" nms-dashboard-image.tar.gz deployment.json --target "$REVISION" --title "Production $REVISION" --notes 'Docker image built and tested by GitHub Actions. Automatically deployed on 192.168.20.195.' --latest
+          fi
+
+  verify:
+    needs: publish
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    environment:
+      name: production
+      url: https://nms.azrilachdi.web.id
+    steps:
+      - name: Wait for server rollout and verify HTTPS/API
+        env:
+          REVISION: ${{ github.sha }}
+        run: |
+          for attempt in $(seq 1 30); do
+            ACTUAL=$(curl --fail --silent --max-time 15 -H 'Cache-Control: no-cache' "https://nms.azrilachdi.web.id/deployment.json?revision=$REVISION" | jq -r .revision) || true
+            if [ "$ACTUAL" = "$REVISION" ]; then
+              curl --fail --silent --max-time 15 https://nms.azrilachdi.web.id/healthz
+              test "$(curl --silent --max-time 15 --output /dev/null --write-out '%{http_code}' https://nms.azrilachdi.web.id/nms-api/api/auth/session)" = 401
+              test "$(curl --silent --max-time 15 --output /dev/null --write-out '%{http_code}' -X POST -H 'Origin: https://untrusted.example' https://nms.azrilachdi.web.id/nms-api/api/auth/login)" = 403
+              exit 0
+            fi
+            sleep 20
+          done
+          echo 'Server did not report the expected healthy revision before timeout.' >&2
+          exit 1

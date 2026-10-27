@@ -1,0 +1,12 @@
+[Unit]
+Description=Check for a tested NMS dashboard release every minute
+
+[Timer]
+OnBootSec=45s
+OnUnitInactiveSec=60s
+RandomizedDelaySec=10s
+Persistent=true
+Unit=nms-dashboard-deploy.service
+
+[Install]
+WantedBy=timers.target

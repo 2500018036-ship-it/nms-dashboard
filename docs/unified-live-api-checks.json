@@ -1,0 +1,127 @@
+{
+  "at": 1792813152.182166,
+  "checks": [
+    {
+      "name": "anonymous_denied",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "administrator_session",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "shared_monitoring_heartbeat",
+      "status": "PASS",
+      "detail": "1.2.0"
+    },
+    {
+      "name": "proxmox_tls_readonly_live",
+      "status": "PASS",
+      "detail": {
+        "nodes": 1,
+        "guests": 2,
+        "storage": 3,
+        "version": {
+          "version": "9.2.2",
+          "release": "9.2"
+        }
+      }
+    },
+    {
+      "name": "topology_create_update_reload_conflict_validation",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "topology_delete",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "inventory_metadata_persistent_crud",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "integration_http_probe_live",
+      "status": "PASS",
+      "detail": {
+        "status": "UP",
+        "http_status": 200
+      }
+    },
+    {
+      "name": "ssrf_allowlist_denied",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "disabled_integration_probe_denied",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "maintenance_persistence_without_muting_production",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "settings_persistence_same_values",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "historical_proxmox_metrics",
+      "status": "PASS",
+      "detail": {
+        "samples": 462,
+        "coverage_percent": 50.08
+      }
+    },
+    {
+      "name": "monitoring_logs_incidents_live",
+      "status": "PASS",
+      "detail": {
+        "logs": 22436,
+        "incidents": 387
+      }
+    },
+    {
+      "name": "audit_real_actions",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "config_export_without_credentials",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "viewer_rbac_and_session_remains_valid",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "logout_revocation",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "verified_service_catalog_saved",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "initial_topology_from_real_proxmox_membership",
+      "status": "PASS",
+      "detail": null
+    },
+    {
+      "name": "temporary_test_config_cleaned",
+      "status": "PASS",
+      "detail": null
+    }
+  ]
+}

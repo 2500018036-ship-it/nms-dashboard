@@ -1,0 +1,5 @@
+export { AssistantPage } from './AssistantPage'
+export { PlatformSettings as SettingsPage } from './PlatformSettings'
+export { IntegrationsPage } from './IntegrationsPage'
+export { LogsPage } from './LogsPage'
+export { UsersPage } from './UsersPage'

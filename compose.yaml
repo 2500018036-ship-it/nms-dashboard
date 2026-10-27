@@ -1,0 +1,34 @@
+services:
+  dashboard:
+    image: ${NMS_DASHBOARD_IMAGE:?Set NMS_DASHBOARD_IMAGE to the release image}
+    container_name: nms-dashboard
+    restart: unless-stopped
+    init: true
+    read_only: true
+    tmpfs:
+      - /tmp:size=32m,noexec,nosuid
+    ports:
+      - "127.0.0.1:18082:8080"
+    networks:
+      - web-proxy
+      - nms-backend
+    cap_drop:
+      - ALL
+    security_opt:
+      - no-new-privileges:true
+    pids_limit: 100
+    mem_limit: 128m
+    cpus: 0.50
+    stop_grace_period: 15s
+    logging:
+      driver: json-file
+      options:
+        max-size: "5m"
+        max-file: "3"
+
+networks:
+  web-proxy:
+    external: true
+  nms-backend:
+    external: true
+    name: nms-bot_default

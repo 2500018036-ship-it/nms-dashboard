@@ -1,0 +1,26 @@
+{
+  "date": "2026-10-23",
+  "live_pagination": [
+    {
+      "page": 1,
+      "http": 200,
+      "rows": 25,
+      "total": 79119,
+      "seconds": 2.095
+    },
+    {
+      "page": 3000,
+      "http": 200,
+      "rows": 25,
+      "total": 79119,
+      "seconds": 2.235
+    }
+  ],
+  "health": "UP",
+  "poller_ready": true,
+  "incident_summary": {
+    "ACTIVE": 2,
+    "RECOVERED": 370,
+    "RETIRED": 8
+  }
+}

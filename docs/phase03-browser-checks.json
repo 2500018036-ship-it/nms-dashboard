@@ -1,0 +1,181 @@
+{
+  "date": "2026-10-23",
+  "desktop": [
+    {
+      "route": "http://127.0.0.1:5173/",
+      "heading": "Overview",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/network",
+      "heading": "Network Monitoring",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/servers",
+      "heading": "Servers & Services",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/topology",
+      "heading": "Topology",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/devices",
+      "heading": "Device Management & Auto-Discovery",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/alerts",
+      "heading": "Alerts & Incidents",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/assistant",
+      "heading": "AI NMS Assistant",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/logs",
+      "heading": "Logs & Log Monitoring",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/reports",
+      "heading": "Reports & History",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/system-health",
+      "heading": "NMS System Health",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/settings",
+      "heading": "System Settings",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/integrations",
+      "heading": "Integrations & Credentials",
+      "overflow": false,
+      "width": 1300
+    },
+    {
+      "route": "http://127.0.0.1:5173/users",
+      "heading": "Users & Audit Logs",
+      "overflow": false,
+      "width": 1300
+    }
+  ],
+  "mobile": [
+    {
+      "heading": "Overview",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Network Monitoring",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Servers & Services",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Topology",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Device Management & Auto-Discovery",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Alerts & Incidents",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "AI NMS Assistant",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Logs & Log Monitoring",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Reports & History",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "NMS System Health",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "System Settings",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Integrations & Credentials",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    },
+    {
+      "heading": "Users & Audit Logs",
+      "drawerClosed": true,
+      "overflow": false,
+      "width": 381
+    }
+  ],
+  "auth": {
+    "validLogin": true,
+    "invalidLoginRejected": true,
+    "emptyFormRejected": true,
+    "sessionReload": true,
+    "crossTabLogout": true,
+    "backProtected": true,
+    "deepLinkReturn": true
+  },
+  "forms": {
+    "emptyRejected": true,
+    "validWithoutStorage": true
+  },
+  "connection": {
+    "tunnelFailureShown": true,
+    "recovery": true
+  },
+  "templateFilesUnchanged": 159
+}

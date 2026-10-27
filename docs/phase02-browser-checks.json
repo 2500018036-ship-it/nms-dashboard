@@ -1,0 +1,171 @@
+{
+  "date": "2026-10-21",
+  "checks": [
+    {
+      "test": "Live form validation without persistence",
+      "passed": true
+    },
+    {
+      "test": "Create demo device",
+      "passed": true
+    },
+    {
+      "test": "Edit demo device",
+      "passed": true
+    },
+    {
+      "test": "Disable demo device with confirmation",
+      "passed": true
+    },
+    {
+      "test": "Simulated connection result clearly labeled",
+      "passed": true
+    },
+    {
+      "test": "Delete demo configuration with confirmation",
+      "passed": true
+    },
+    {
+      "test": "Discovery simulation with explicit approval",
+      "passed": true
+    },
+    {
+      "test": "Reject malformed import and approve valid preview",
+      "passed": true
+    },
+    {
+      "test": "Export JSON browser download",
+      "passed": true
+    },
+    {
+      "test": "Overview renders two ApexCharts graphs",
+      "passed": true
+    },
+    {
+      "test": "Network selection and DOWN filter, VM/LXC and Docker tabs",
+      "passed": true
+    },
+    {
+      "test": "Topology node selection and link table",
+      "passed": true
+    },
+    {
+      "test": "Alert acknowledgment stored only in demo session",
+      "passed": true
+    },
+    {
+      "test": "Production has no demo activation or sample inventory",
+      "passed": true
+    },
+    {
+      "test": "Pagination and device type/group filtering",
+      "passed": true
+    },
+    {
+      "check": "exit demonstration resets inventory, filters and messages",
+      "passed": true
+    }
+  ],
+  "routes": [
+    {
+      "name": "Overview",
+      "title": "Overview"
+    },
+    {
+      "name": "Network Monitoring",
+      "title": "Network Monitoring"
+    },
+    {
+      "name": "Servers & Services",
+      "title": "Servers & Services"
+    },
+    {
+      "name": "Topology",
+      "title": "Topology"
+    },
+    {
+      "name": "Devices & Discovery",
+      "title": "Device Management & Auto-Discovery"
+    },
+    {
+      "name": "Alerts & Incidents",
+      "title": "Alerts & Incidents"
+    },
+    {
+      "name": "AI NMS Assistant",
+      "title": "AI NMS Assistant"
+    },
+    {
+      "name": "Logs & Log Monitoring",
+      "title": "Logs & Log Monitoring"
+    },
+    {
+      "name": "Reports & History",
+      "title": "Reports & History"
+    },
+    {
+      "name": "NMS System Health",
+      "title": "NMS System Health"
+    },
+    {
+      "name": "System Settings",
+      "title": "System Settings"
+    },
+    {
+      "name": "Integrations",
+      "title": "Integrations & Credentials"
+    },
+    {
+      "name": "Users & Audit Logs",
+      "title": "Users & Audit Logs"
+    }
+  ],
+  "mobile": [
+    {
+      "name": "Overview",
+      "clientWidth": 271,
+      "documentWidth": 271,
+      "width": 282
+    },
+    {
+      "name": "Network Monitoring",
+      "clientWidth": 271,
+      "documentWidth": 271,
+      "width": 282
+    },
+    {
+      "name": "Servers & Services",
+      "clientWidth": 271,
+      "documentWidth": 271,
+      "width": 282
+    },
+    {
+      "name": "Topology",
+      "clientWidth": 271,
+      "documentWidth": 271,
+      "width": 282
+    },
+    {
+      "name": "Alerts & Incidents",
+      "clientWidth": 271,
+      "documentWidth": 271,
+      "width": 282
+    },
+    {
+      "name": "Devices & Discovery",
+      "clientWidth": 271,
+      "documentWidth": 271,
+      "width": 282
+    }
+  ],
+  "modal": {
+    "bodyScrollable": true,
+    "clientWidth": 282,
+    "documentWidth": 282,
+    "footerBottom": 581.7551651000977,
+    "height": 610,
+    "modalRight": 273.9661693572998,
+    "width": 282
+  },
+  "console": []
+}
