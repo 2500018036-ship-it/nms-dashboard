@@ -6,6 +6,8 @@ COPY index.html vite.config.js ./
 COPY config ./config
 COPY src ./src
 COPY public ./public
+COPY template-dashboard/src-modern/styles ./template-dashboard/src-modern/styles
+COPY template-dashboard/src-modern/scripts/utils ./template-dashboard/src-modern/scripts/utils
 ENV VITE_NMS_API_ENABLED=true VITE_NMS_API_BASE=/nms-api
 RUN npm run build
 

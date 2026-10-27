@@ -12,3 +12,10 @@
 !public/**
 !deploy/
 !deploy/nginx.conf
+!template-dashboard/
+!template-dashboard/src-modern/
+!template-dashboard/src-modern/styles/
+!template-dashboard/src-modern/styles/**
+!template-dashboard/src-modern/scripts/
+!template-dashboard/src-modern/scripts/utils/
+!template-dashboard/src-modern/scripts/utils/**

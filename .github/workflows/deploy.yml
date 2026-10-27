@@ -65,7 +65,6 @@ jobs:
           jq -n --arg revision "$REVISION" --arg checksum "$CHECKSUM" '{revision:$revision,sha256:$checksum}' > deployment.json
           TAG="deploy-$REVISION"
           if gh release view "$TAG" >/dev/null 2>&1; then
-            gh release upload "$TAG" nms-dashboard-image.tar.gz deployment.json --clobber
             gh release edit "$TAG" --latest
           else
             gh release create "$TAG" nms-dashboard-image.tar.gz deployment.json --target "$REVISION" --title "Production $REVISION" --notes 'Docker image built and tested by GitHub Actions. Automatically deployed on 192.168.20.195.' --latest
