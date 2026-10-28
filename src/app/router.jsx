@@ -12,6 +12,7 @@ import { NetworkPage } from '../pages/NetworkPage'
 import { ServersPage } from '../pages/ServersPage'
 import { DevicesPage } from '../pages/DevicesPage'
 import { AlertsPage } from '../pages/AlertsPage'
+import { AccessPortalPage } from '../pages/AccessPortalPage'
 import { ManagementPage } from '../pages/ManagementPage'
 import { TopologyEditor } from '../pages/TopologyEditor'
 import { IntegrationsPage, ServiceDetailPage } from '../pages/IntegrationsPage'
@@ -41,6 +42,7 @@ export function AppRouter() {
           <Route path="servers" element={<ServersPage />} />
           <Route path="topology" element={<TopologyEditor />} />
           <Route path="devices" element={<DevicesPage />} />
+          <Route path="access" element={<AccessPortalPage />} />
           <Route path="management" element={<ManagementPage />} />
           <Route path="alerts" element={<AlertsPage />} />
           <Route path="assistant" element={<AssistantPage />} />
@@ -63,7 +65,7 @@ export function AppRouter() {
 
 function ProtectedWorkspace() {
   const { status, error, check } = useAuth(); const location = useLocation()
-  if (status === 'checking') return <main className="container py-5 text-center" aria-live="polite"><span className="spinner-border text-primary mb-3" /><p>Memeriksa sesi dashboard…</p></main>
+  if (status === 'checking') return <main className="container py-5 text-center" aria-live="polite"><span className="spinner-border text-primary mb-3" /><p>Memeriksa sesi dashboardÃ¢â‚¬Â¦</p></main>
   if (status === 'error') return <main className="container py-5"><div className="card mx-auto p-4" style={{ maxWidth: 520 }}><h1 className="h4">Sesi belum dapat diverifikasi</h1><p className="text-muted">{errorMessages[error] || 'Backend belum dapat diakses'}. Data monitoring memerlukan sesi yang valid.</p><button className="btn btn-primary" onClick={check}>Coba hubungkan kembali</button><Link className="btn btn-link mt-2" to="/login" state={{ from: location.pathname }}>Ke halaman masuk</Link></div></main>
   if (status !== 'authenticated') return <Navigate to="/login" replace state={{ from: location.pathname, expired: error === 'session_expired' }} />
   return <MonitoringProvider><PlatformProvider><Outlet /></PlatformProvider></MonitoringProvider>

@@ -1,0 +1,29 @@
+# Reviewed activation and rollback
+
+This procedure is staged only. Approval is required before merging into `main`, restarting NMS, installing the broker/mount, or reloading either existing proxy. No WireGuard, route, firewall, target-device configuration, or additional public port is part of this change.
+
+## Exact production changes
+
+1. Merge the reviewed branch after the real Chromium smoke test passes. CI tests and publishes four revision-labelled images (dashboard, backend, access gateway, browser worker). The existing pull timer loads the tested release; the portal remains disabled until the following activation.
+2. On `192.168.20.195`, save the current release environment, deploy script, NMS Compose files, and NPM `/data/nginx/custom/nms-dashboard.conf` to a root-only timestamped backup. Do not replace NPM-managed proxy hosts.
+3. Install the reviewed `access/theaz_access` package under `/opt/theaz_access`, in a dedicated Python virtual environment using `access/requirements.txt`. Install root-owned `targets.json`, `worker/seccomp.json`, and `broker.env.example` as `/etc/theaz_access/{targets.json,seccomp.json,broker.env}`. Replace `REVIEWED_COMMIT` with the exact deployed revision. Create only group `theaz-access` with GID 31000 after checking it is unused. Create `/var/lib/theaz_access/{sessions,audit}`; the audit directory is mode 0700 owned by 31000:31000.
+4. Install the reviewed mount and broker unit in `/etc/systemd/system`; validate with `systemd-analyze verify` and enable them. The mount is a new 512 MiB tmpfs for ephemeral profiles, uploads and downloads. The broker runs as root, uses only a local Unix socket and launches fixed constrained containers. The HTTP gateway has no Docker socket.
+5. Copy `deploy/access/{compose.yaml,backend.override.yaml}` under `/mnt/data/www/nms-dashboard/deploy/access/`. Update `/usr/local/sbin/nms-dashboard-pull-release` from the reviewed `deploy/pull-release.sh`. Set `/var/lib/nms-dashboard-deploy/access-worker-image` to `theaz-access-worker:<revision>` and add `NMS_ACCESS_GATEWAY_IMAGE=theaz-access-gateway:<revision>` to the existing release environment. Create root-owned `/etc/theaz_access/enabled` only after these prerequisites pass. The new script preserves the access override and matching gateway/worker images on subsequent tested deployments.
+6. Start the new access Compose project, then recreate **only** `nms-bot` with its existing Compose files plus `backend.override.yaml`. Keep its existing credentials, volumes, collectors and networks. Expect a short NMS API interruption; do not restart unrelated containers.
+7. Insert `npm-location.conf` inside the existing NMS-only server block. Run `docker exec nginx-proxy-manager nginx -t`; reload only if valid. On `20.194.8.143`, back up the active NMS TLS virtual host, insert `gateway-location.conf` inside its HTTPS block, run `nginx -t` and reload. Do not replace the full virtual host or modify certificates, redirects, other domains, or firewall rules.
+8. Verify public HTTPS: anonymous catalog/display requests fail; cross-origin create/display requests fail; an authorized NMS login can open and close each of the seven targets at `/access`. Check native GUI login with its own account, then logout/role revocation/idle cleanup. Confirm no browser ports are published, the worker remains `network=none`, unrelated services stay healthy, and audit events contain metadata only.
+
+Stop the deploy timer during this short activation window to avoid concurrent rollout, then re-enable it after verification. Keep the previous four images and backups. Broker code/config changes are separately reviewed host updates; the pull timer updates matching browser/gateway images only. Certificate changes require re-auditing their SPKI pins; do not add a blanket TLS bypass.
+
+## Rollback order
+
+1. Stop the NMS deploy timer temporarily. Restore both NMS-only proxy backups, validate configuration and reload them. This immediately removes the portal route from the public domain.
+2. Remove `/etc/theaz_access/enabled`; restore the previous release environment and pull script. Recreate only NMS backend/dashboard using their original Compose files and previous tested images, without the access override. Verify `/healthz` and that the anonymous session endpoint returns 401.
+3. Stop the access Compose project and broker; the broker removes only its labelled worker containers. Confirm no `theaz-access-<session>` containers remain. Unmount/disable the dedicated tmpfs unit after all workers stop. Preserve the root-private audit database; ephemeral profiles are discarded.
+4. Re-enable the deploy timer only after the approved healthy release is selected, so it cannot immediately reapply the failed release. Use the existing `blocked-revision` mechanism when appropriate.
+
+## Compatibility limits to verify explicitly
+
+The GUI is the original page running in Chromium on the server. Native credentials/cookies stay in that ephemeral browser, not in NMS JavaScript. Sessions are limited to one globally on the current 4 GiB host, expire after 10 minutes idle or 30 minutes maximum, and are isolated per NMS login. Download/upload transfer is bounded to 15 MiB per file, 32 MiB cumulative uploads per session and 512 MiB total session storage. Client USB/FIDO hardware passthrough, arbitrary external origins and large ISO transfers are not supported. A GUI operation needing another origin is denied until that exact origin is audited and explicitly configured. Native account authorization still governs what can be changed on each device.
+
+HTTP reachability, native login, console WebSocket, file transfer, and public NMS end-to-end access are distinct checks. Record each as PASS, FAIL or NOT TESTED; do not infer a successful login from HTTP 200 or a login-page screenshot.

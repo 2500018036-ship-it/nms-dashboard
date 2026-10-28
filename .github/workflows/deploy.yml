@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: nms-${{ github.workflow }}-${{ github.ref }}
@@ -38,15 +39,30 @@ jobs:
           docker build --target test -t nms-backend-tests ./backend
           docker run --rm --network none nms-backend-tests
 
+  access-test:
+    uses: ./.github/workflows/access-portal.yml
+
   publish:
-    needs: [test, backend-test]
+    needs: [test, backend-test, access-test]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Load the exact browser images validated by the access job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ github.sha }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name theaz-access-review-images --dir /tmp/access-artifact
+          docker load --input /tmp/access-artifact/theaz-access-review-images.tar.gz
+          for portal_image in theaz-access-gateway theaz-access-worker; do
+            test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$portal_image:test")" = "$REVISION"
+            docker tag "$portal_image:test" "$portal_image:$REVISION"
+          done
       - name: Build production Docker image
         env:
           REVISION: ${{ github.sha }}
@@ -72,9 +88,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REVISION: ${{ github.sha }}
         run: |
-          docker save "nms-dashboard:$REVISION" "nms-backend:$REVISION" | gzip -1 > nms-dashboard-image.tar.gz
+          docker save "nms-dashboard:$REVISION" "nms-backend:$REVISION" "theaz-access-gateway:$REVISION" "theaz-access-worker:$REVISION" | gzip -1 > nms-dashboard-image.tar.gz
           CHECKSUM=$(sha256sum nms-dashboard-image.tar.gz | cut -d ' ' -f 1)
-          jq -n --arg revision "$REVISION" --arg checksum "$CHECKSUM" '{revision:$revision,sha256:$checksum,backend:true}' > deployment.json
+          jq -n --arg revision "$REVISION" --arg checksum "$CHECKSUM" '{revision:$revision,sha256:$checksum,backend:true,access:true}' > deployment.json
           TAG="deploy-$REVISION"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --latest

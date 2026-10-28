@@ -346,3 +346,5 @@ By installing ApexCharts (e.g., via `npm install apexcharts`), you are agreeing 
 ---
 
 Thank you for supporting ApexCharts! Your licensing helps keep it free and open for individuals and small teams.
+
+noVNC 1.7.0 — MPL-2.0. Copyright noVNC contributors. Source and license: https://github.com/novnc/noVNC

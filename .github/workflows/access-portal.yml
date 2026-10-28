@@ -1,0 +1,54 @@
+name: Access portal review checks
+on:
+  push:
+    branches: [feat/centralized-access-portal]
+  workflow_dispatch:
+  workflow_call:
+permissions:
+  contents: read
+  actions: read
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020
+        with: {node-version: '22', cache: npm}
+      - run: npm ci
+      - run: npm run lint
+      - run: npm test
+      - run: npm run build
+      - name: Access API and security regression tests
+        run: |
+          python3 -m venv /tmp/access-tests
+          /tmp/access-tests/bin/pip install -r access/requirements.txt
+          PYTHONPATH=access /tmp/access-tests/bin/python -m unittest discover -s access/tests -p 'test_*.py' -v
+      - name: Build private gateway and sandboxed browser
+        run: |
+          docker build --build-arg "VCS_REF=$GITHUB_SHA" -t theaz-access-gateway:test ./access
+          docker build --build-arg "VCS_REF=$GITHUB_SHA" -f access/worker/Dockerfile -t theaz-access-worker:test ./access
+      - name: Verify native redirects, cookies, WebSocket and display with real Chromium
+        run: sudo env PYTHONPATH=access /tmp/access-tests/bin/python access/tests/smoke_worker.py
+      - name: Package reviewed browser images
+        run: docker save theaz-access-gateway:test theaz-access-worker:test | gzip -1 > theaz-access-review-images.tar.gz
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: theaz-access-review-images
+          path: theaz-access-review-images.tar.gz
+          retention-days: 7
+  artifact-test:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify the release can load the exact tested images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ github.sha }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name theaz-access-review-images --dir /tmp/access-artifact
+          docker load --input /tmp/access-artifact/theaz-access-review-images.tar.gz
+          for portal_image in theaz-access-gateway theaz-access-worker; do
+            test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$portal_image:test")" = "$REVISION"
+          done

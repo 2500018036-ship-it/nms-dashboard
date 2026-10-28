@@ -32,6 +32,9 @@ class PlatformAPI:
         return session['user']['username']
 
     def get(self,path,query,session):
+        if path=='/api/platform/access':
+            from app.dashboard.access import authorize
+            return authorize(self.store,session,query)
         credential_match=re.fullmatch(r'/api/platform/credentials/(integration|inventory|device)/([a-z0-9_]{1,80})',path)
         if credential_match:
             if query:raise ValueError('invalid_query')

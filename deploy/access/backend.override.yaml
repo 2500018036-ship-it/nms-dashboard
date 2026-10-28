@@ -1,0 +1,7 @@
+services:
+  nms-bot:
+    environment:
+      NMS_ACCESS_ENABLED: "true"
+      NMS_ACCESS_TARGETS_FILE: /etc/theaz_access/targets.json
+    volumes:
+      - /etc/theaz_access/targets.json:/etc/theaz_access/targets.json:ro
