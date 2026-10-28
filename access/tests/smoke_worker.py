@@ -42,7 +42,7 @@ async def main():
         command=['docker','run','-d','--name',name,'--network','none','--user','31000:31000','--read-only','--init',
           '--cap-drop','ALL','--security-opt','no-new-privileges:true','--security-opt','seccomp='+str(Path('access/worker/seccomp.json').resolve()),
           '--memory','1g','--cpus','1','--pids-limit','256','--shm-size','128m','--tmpfs','/tmp:rw,nosuid,nodev,size=128m,mode=1777',
-          '--mount','type=bind,src='+directory+',dst=/run/session','theaz-access-worker:test']
+          '--mount','type=bind,src='+directory+',dst=/run/session',os.getenv('ACCESS_TEST_WORKER_IMAGE','theaz-access-worker:test')]
         try:
             await asyncio.to_thread(subprocess.run,command,check=True,stdout=subprocess.DEVNULL)
             for _ in range(120):
