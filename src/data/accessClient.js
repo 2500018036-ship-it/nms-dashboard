@@ -13,7 +13,7 @@ export const accessErrors = {
 }
 
 export async function accessRequest(path, method = 'GET', body) {
-  if (!/^\/(?:catalog|audit|sessions(?:\/[a-f0-9]{32}(?:\/activity)?)?)$/.test(path)) throw new Error('unavailable')
+  if (!/^\/(?:catalog|audit|sessions(?:\/[a-f0-9]{32}(?:\/(?:activity|downloads))?)?)$/.test(path)) throw new Error('unavailable')
   const controller = new AbortController()
   const timer = setTimeout(() => controller.abort(), 45000)
   try {

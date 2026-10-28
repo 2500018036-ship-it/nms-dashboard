@@ -49,7 +49,9 @@ async def main():
                 if all(visited.values()):break
                 if (root/'state.json').exists() and json.loads((root/'state.json').read_text()).get('state')=='failed':
                     # Only fixture traffic is present; useful CI diagnostics, no production data.
-                    subprocess.run(['docker','exec',name,'cat','/tmp/browser-runtime.log'],check=False)
+                    diagnostic = root/'fixture-runtime.log'
+                    subprocess.run(['docker','cp',name+':/tmp/browser-runtime.log',str(diagnostic)],check=False)
+                    if diagnostic.exists():print(diagnostic.read_text(errors='replace'),flush=True)
                     raise AssertionError('Browser sandbox/runtime failed')
                 await asyncio.sleep(0.5)
             assert all(visited.values()),visited

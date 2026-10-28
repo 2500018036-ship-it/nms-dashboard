@@ -9,6 +9,7 @@ from app.dashboard.platform import Forbidden, Missing
 
 
 def authorize(store, session, query):
+    if not session:raise Forbidden()
     if set(query) - {'target'} or any(len(v) != 1 for v in query.values()):
         raise ValueError('invalid_query')
     identity = query.get('target', [''])[0]

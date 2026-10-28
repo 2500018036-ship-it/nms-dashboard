@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
-import RFB from '@novnc/novnc'
 import { usePlatform } from '../data/platformContext'
 import { accessErrors, accessRequest, displayURL } from '../data/accessClient'
+import { AccessFiles } from '../components/AccessFiles'
 import { Panel, formatTime } from '../components/ui'
 
 function NativeDisplay({ session, onState, onActivity }) {
@@ -10,15 +10,19 @@ function NativeDisplay({ session, onState, onActivity }) {
   const [text, setText] = useState('')
   const [scaled, setScaled] = useState(true)
   useEffect(() => {
-    const client = new RFB(container.current, displayURL(session.websocket_path, window.location))
-    rfb.current = client
-    client.scaleViewport = true
-    client.resizeSession = false
-    client.background = '#101318'
-    client.addEventListener('connect', () => onState('connected'))
-    client.addEventListener('disconnect', () => onState('disconnected'))
-    client.addEventListener('securityfailure', () => onState('failed'))
-    return () => { client.disconnect(); rfb.current = null }
+    let client; let cancelled = false
+    import('@novnc/novnc').then(({ default: RFB }) => {
+      if (cancelled) return
+      client = new RFB(container.current, displayURL(session.websocket_path, window.location))
+      rfb.current = client
+      client.scaleViewport = true
+      client.resizeSession = false
+      client.background = '#101318'
+      client.addEventListener('connect', () => onState('connected'))
+      client.addEventListener('disconnect', () => { onState('disconnected'); container.current?.replaceChildren() })
+      client.addEventListener('securityfailure', () => onState('failed'))
+    }).catch(() => onState('failed'))
+    return () => { cancelled = true; client?.disconnect(); rfb.current = null }
   }, [session.id, session.websocket_path, onState])
   const key = (symbol, code) => { rfb.current?.sendKey(symbol, code); onActivity() }
   const paste = () => {
@@ -96,6 +100,7 @@ export function AccessPortalPage() {
     </Panel>
     {session && <Panel title={selected?.name || 'GUI perangkat'} subtitle={`Sesi ${state === 'connected' ? 'terhubung' : session.state === 'starting' ? 'sedang disiapkan' : state} Â· Berakhir ${formatTime(session.expires_at)}`} action={<button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={close}>Tutup sesi</button>}>
       {session.state === 'ready' ? <NativeDisplay key={session.id} session={session} onState={setState} onActivity={activity} /> : <div className="py-5 text-center" role="status">{session.state === 'failed' ? 'Browser sesi gagal dimulai. Tutup sesi lalu periksa runtime.' : <><span className="spinner-border text-primary" /><p className="mt-3">Menyiapkan GUI asliâ€¦</p></>}</div>}
+      {session.state === 'ready' && <AccessFiles session={session} />}
     </Panel>}
     {!session && <div className="alert alert-secondary">Sesi GUI dipisahkan per login dan berakhir otomatis saat tidak digunakan. Hak di dalam perangkat mengikuti akun asli perangkat tersebut.</div>}
     {admin && <Panel title="Audit akses GUI" action={<button className="btn btn-sm btn-outline-secondary" disabled={!catalog?.enabled} onClick={() => accessRequest('/audit').then((v) => setAudit(v.items)).catch((e) => setError(e.message))}>Muat log akses</button>}>
