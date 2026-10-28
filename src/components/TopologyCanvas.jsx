@@ -17,7 +17,7 @@ export default function TopologyCanvas(props) {
     const nodes = new Map(); const edges = new Map()
     let updating = false; let fingerprint = ''; let viewKey = ''
     graph.setConnectable(true); graph.setPanning(true); graph.setHtmlLabels(false)
-    graph.setAllowDanglingEdges(false); graph.setAllowLoops(false); graph.setCellsEditable(false)
+    graph.setAllowDanglingEdges(false); graph.setAllowLoops(false); graph.setCellsEditable(false); graph.setCellsCloneable(false); graph.setTooltips(true)
     const validateEdge = graph.getEdgeValidationError.bind(graph)
     graph.getEdgeValidationError = (edge, source, target) => graph.getChildEdges(parent).length >= 200 && !graph.getChildEdges(parent).includes(edge) ? 'Maksimal 200 koneksi.' : validateEdge(edge, source, target)
     graph.getPlugin('PanningHandler').useLeftButtonForPanning = true
