@@ -119,7 +119,21 @@
         "Server Administrator"
       ],
       "tls_spki": [],
-      "connect_ip": "20.194.8.143"
+      "connect_ip": "20.194.8.143",
+      "asset_origins": [
+        {
+          "url": "https://cdn.tailwindcss.com/",
+          "connect_ip": "104.26.2.143"
+        },
+        {
+          "url": "https://fonts.googleapis.com/",
+          "connect_ip": "172.253.118.95"
+        },
+        {
+          "url": "https://fonts.gstatic.com/",
+          "connect_ip": "172.253.144.94"
+        }
+      ]
     },
     {
       "id": "cloud",

@@ -31,10 +31,11 @@ def destination(method, raw_url, selected):
     address=selected.get('connect_ip') or host
     if method == 'CONNECT':
         # Chromium may tunnel a native ws:// connection as well as HTTPS.
-        # CONNECT still reaches exactly the selected web endpoint, never another port.
-        if raw_url != f'{host}:{port}':
-            raise ValueError('origin_denied')
-        return address, port, None
+        # Only the selected endpoint and explicitly reviewed HTTPS asset origins.
+        for endpoint in [selected,*selected.get('asset_origins',[])]:
+            _,name,endpoint_port=origin(endpoint['url'],endpoint.get('connect_ip'))
+            if raw_url==f'{name}:{endpoint_port}':return endpoint.get('connect_ip') or name,endpoint_port,None
+        raise ValueError('origin_denied')
     url = urlsplit(raw_url)
     if scheme != 'http' or url.scheme not in {'http','ws'} or url.hostname != host or (url.port or 80) != port or url.username or url.password or url.fragment:
         raise ValueError('origin_denied')

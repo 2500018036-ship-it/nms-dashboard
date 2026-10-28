@@ -49,6 +49,15 @@ class PolicyTests(unittest.TestCase):
         for value in ('http://169.254.169.254/','http://127.0.0.1/','http://user:pass@192.168.20.1/'):
             with self.assertRaises(ValueError):origin(value)
 
+    def test_asset_origins_are_target_specific_and_ports_and_hosts_remain_exact(self):
+        config=load(CONFIG)
+        portfolio=target(config,'portfolio')
+        self.assertEqual(egress.destination('CONNECT','cdn.tailwindcss.com:443',portfolio),('104.26.2.143',443,None))
+        for selected in (target(config,'cloud'),target(config,'phpmyadmin'),target(config,'mikrotik')):
+            with self.assertRaises(ValueError):egress.destination('CONNECT','cdn.tailwindcss.com:443',selected)
+        for authority in ('cdn.tailwindcss.com:80','evil.tailwindcss.com:443','fonts.googleapis.com.evil.test:443','169.254.169.254:443'):
+            with self.assertRaises(ValueError):egress.destination('CONNECT',authority,portfolio)
+
 
 class GatewayTests(unittest.IsolatedAsyncioTestCase):
     async def asyncSetUp(self):

@@ -51,6 +51,12 @@ def load(path):
         ids.add(target['id'])
         origin(target['url'],target.get('connect_ip'))
         if target.get('connect_ip') and target.get('inventory_mac'):raise ValueError('invalid_target_mapping')
+        assets=target.get('asset_origins',[])
+        if not isinstance(assets,list) or len(assets)>8:raise ValueError('invalid_asset_origins')
+        for asset in assets:
+            if set(asset)!={'url','connect_ip'}:raise ValueError('invalid_asset_origin')
+            scheme,_,port=origin(asset['url'],asset['connect_ip'])
+            if scheme!='https' or port!=443 or urlsplit(asset['url']).path not in ('','/') or urlsplit(asset['url']).query:raise ValueError('invalid_asset_origin')
         if not target['roles'] or any(role not in {'Administrator', 'Super Administrator', 'Network Administrator', 'Server Administrator'} for role in target['roles']):
             raise ValueError('invalid_roles')
         for pin in target.get('tls_spki', []):
