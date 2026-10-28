@@ -28,8 +28,9 @@ async def tunnel(left_reader, left_writer, right_reader, right_writer):
 def destination(method, raw_url, selected):
     scheme, host, port = origin(selected)
     if method == 'CONNECT':
-        url = urlsplit('https://' + raw_url)
-        if scheme != 'https' or url.hostname != host or (url.port or 443) != port or url.username or url.password or url.path or url.query or url.fragment:
+        # Chromium may tunnel a native ws:// connection as well as HTTPS.
+        # CONNECT still reaches exactly the selected web endpoint, never another port.
+        if raw_url != f'{host}:{port}':
             raise ValueError('origin_denied')
         return host, port, None
     url = urlsplit(raw_url)

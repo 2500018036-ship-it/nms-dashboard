@@ -23,6 +23,8 @@ class PolicyTests(unittest.TestCase):
         for value in ('http://127.0.0.1/','http://169.254.169.254/','http://192.168.10.26:81/','http://192.168.10.27/','http://u:p@192.168.10.26/','https://192.168.10.26/'):
             with self.subTest(url=value),self.assertRaises(ValueError):egress.destination('GET',value,selected)
         self.assertEqual(egress.destination('CONNECT','192.168.20.200:8006','https://192.168.20.200:8006/'),('192.168.20.200',8006,None))
+        self.assertEqual(egress.destination('CONNECT','192.168.10.26:80',selected),('192.168.10.26',80,None))
+        with self.assertRaises(ValueError):egress.destination('CONNECT','192.168.10.26:22',selected)
         with self.assertRaises(ValueError):egress.destination('CONNECT','192.168.20.200:22','https://192.168.20.200:8006/')
 
     def test_config_is_audited_roles_are_restricted_and_ids_are_not_paths(self):
