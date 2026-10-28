@@ -3,7 +3,7 @@ import ipaddress
 import re
 from urllib.parse import urlsplit
 
-KINDS = ('router', 'switch', 'firewall', 'server', 'access-point', 'proxmox', 'vm', 'lxc', 'docker', 'dns', 'proxy', 'application','iot','generic','other')
+KINDS = ('router', 'switch', 'firewall', 'server', 'access-point', 'proxmox', 'vm', 'lxc', 'docker', 'dns', 'proxy', 'application','iot','generic','other','computer','laptop','cloud','internet','nas','printer','ups','phone','ip-camera','vpn')
 ROLES = ('Administrator','Super Administrator','Network Administrator','Server Administrator','Operator','Read-only operator','Viewer')
 COLLECTIONS = ('integrations', 'topologies', 'inventory', 'maintenance')
 
@@ -114,21 +114,32 @@ def record(collection, body, allowed_hosts=(), targets=()):
         if not isinstance(body['nodes'],list) or len(body['nodes'])>100 or not isinstance(body['links'],list) or len(body['links'])>200: raise ValueError('topology_too_large')
         nodes=[]; ids=set()
         for n in body['nodes']:
-            fields(n, ('id','name','kind','x','y','group','collector','resource_id','service_id','device_id'), ('id','name','kind','x','y'))
+            fields(n, ('id','name','kind','x','y','width','height','icon','group','collector','resource_id','service_id','device_id'), ('id','name','kind','x','y'))
             identity=text(n['id'],1,60)
             if not re.fullmatch(r'[a-zA-Z0-9_-]+',identity) or identity in ids or n['kind'] not in KINDS: raise ValueError('invalid_node')
             ids.add(identity)
             item={'id':identity,'name':text(n['name'],1,80),'kind':n['kind'],'x':integer(n['x'],-5000,5000),'y':integer(n['y'],-5000,5000)}
+            if 'width' in n:item['width']=integer(n['width'],40,400)
+            if 'height' in n:item['height']=integer(n['height'],40,400)
+            if 'icon' in n:
+                item['icon']=text(n['icon'],1,40)
+                if not re.fullmatch(r'[a-z][a-z0-9-]{0,39}',item['icon']):raise ValueError('invalid_node')
             for k in ('group','collector','resource_id','service_id','device_id'): item[k]=text(n.get(k,''),0,100)
             if item['collector'] and item['collector'] not in targets: raise ValueError('invalid_collector')
             nodes.append(item)
         links=[]; ids_links=set()
         for e in body['links']:
-            fields(e, ('id','source','target','type','label','source_port','target_port','vlan','speed_mbps','evidence'), ('id','source','target','type','label'))
+            fields(e, ('id','source','target','type','label','source_port','target_port','vlan','speed_mbps','evidence','points'), ('id','source','target','type','label'))
             item={k:text(e[k],1 if k!='label' else 0,80) for k in ('id','source','target','type','label')}
             item.update(source_port=text(e.get('source_port',''),0,80),target_port=text(e.get('target_port',''),0,80),
                 vlan=integer(e.get('vlan',0),0,4094),speed_mbps=integer(e.get('speed_mbps',0),0,1000000),evidence=text(e.get('evidence','manual'),1,80))
             if item['id'] in ids_links or item['source'] not in ids or item['target'] not in ids or item['source']==item['target']: raise ValueError('invalid_link')
+            if 'points' in e:
+                if not isinstance(e['points'],list) or len(e['points'])>32:raise ValueError('invalid_link')
+                item['points']=[]
+                for point in e['points']:
+                    fields(point,('x','y'),('x','y'))
+                    item['points'].append({'x':integer(point['x'],-5000,5000),'y':integer(point['y'],-5000,5000)})
             ids_links.add(item['id']);links.append(item)
         return {'name':text(body['name'],1,80),'nodes':nodes,'links':links}
     raise ValueError('invalid_collection')

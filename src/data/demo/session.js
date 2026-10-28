@@ -9,8 +9,8 @@ export function createDemoSession() {
     device('demo-switch', 'DEMO-ACCESS-SWITCH', '192.0.2.2', 'switch', ['snmp'], 'network', 'Network'),
     device('demo-host', 'DEMO-APPLICATION-HOST', '192.0.2.10', 'server', ['agent'], 'host', 'Compute'),
     device('demo-pve', 'DEMO-HYPERVISOR', '192.0.2.30', 'hypervisor', ['api'], 'virtualization', 'Compute'),
-    device('demo-dns', 'DEMO-DNS', '192.0.2.53', 'dns', ['dns'], 'services', 'Services'),
-    device('demo-web', 'DEMO-WEB', 'web.example.test', 'service', ['http'], 'services', 'Services'),
+    device('demo-dns', 'DEMO-DNS', '192.0.2.53', 'dns', ['dns'], 'services', 'Layanan'),
+    device('demo-web', 'DEMO-WEB', 'web.example.test', 'service', ['http'], 'services', 'Layanan'),
   ]
   const candidates = [{ id: 'demo-found-40', device: device('demo-found-40', 'DEMO-DISCOVERED-SERVER', '192.0.2.40', 'server', ['icmp'], 'connectivity', 'Discovered'), approved: false }, { id: 'demo-found-41', device: device('demo-found-41', 'DEMO-DISCOVERED-SWITCH', '192.0.2.41', 'switch', ['snmp'], 'network', 'Discovered'), approved: false }]
   const deviceService = createMemoryDeviceService(inventory, candidates)

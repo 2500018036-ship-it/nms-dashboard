@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
+import { useSearchParams } from 'react-router'
 import { usePlatform } from '../data/platformContext'
 import { accessErrors, accessRequest, displayURL } from '../data/accessClient'
 import { AccessFiles } from '../components/AccessFiles'
@@ -50,6 +51,9 @@ function NativeDisplay({ session, onState, onActivity }) {
 
 export function AccessPortalPage() {
   const platform = usePlatform()
+  const [params] = useSearchParams()
+  const autoOpened = useRef('')
+  const mounted = useRef(false)
   const [catalog, setCatalog] = useState(null)
   const [session, setSession] = useState(null)
   const [state, setState] = useState('idle')
@@ -68,21 +72,30 @@ export function AccessPortalPage() {
     const timer = setInterval(() => accessRequest('/sessions/' + session.id).then(setSession).catch((e) => setError(e.message)), 2000)
     return () => clearInterval(timer)
   }, [session])
-  useEffect(() => () => {
+  useEffect(() => { mounted.current = true; return () => {
+    mounted.current = false
     if (current.current) fetch('/access-api/sessions/' + current.current, { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {})
-  }, [])
+  } }, [])
   const activity = useCallback(() => {
     if (!current.current || Date.now() - lastActivity.current < 15000) return
     lastActivity.current = Date.now()
     accessRequest('/sessions/' + current.current + '/activity', 'POST', {}).catch((e) => setError(e.message))
   }, [])
-  const open = async (target) => {
+  const open = useCallback(async (target) => {
     setBusy(true); setError(''); setState('starting')
     try {
       const value = await accessRequest('/sessions', 'POST', { target })
+      if (!mounted.current) { accessRequest('/sessions/' + value.id, 'DELETE').catch(() => {}); return }
       current.current = value.id; setSession(value)
     } catch (e) { setError(e.message); setState('failed') } finally { setBusy(false) }
-  }
+  }, [])
+  const requested = params.get('target') || ''
+  useEffect(() => {
+    if (!catalog?.enabled || !requested || session || busy || autoOpened.current === requested) return
+    if (!catalog.targets.some((target) => target.id === requested && target.allowed)) return
+    const timer = setTimeout(() => { autoOpened.current = requested; open(requested) }, 0)
+    return () => clearTimeout(timer)
+  }, [catalog, requested, session, busy, open])
   const close = async () => {
     if (!session) return
     setBusy(true)
@@ -95,19 +108,19 @@ export function AccessPortalPage() {
   const selected = catalog?.targets.find((t) => t.id === session?.target)
   const admin = platform.capabilities.permissions?.includes('config.manage')
   return <>
-    <Panel title="THEAZ Access Portal" subtitle="GUI asli perangkat dan layanan melalui koneksi privat homelab">
+    <Panel title="THEAZ Portal Akses" subtitle="GUI asli perangkat dan layanan melalui koneksi privat homelab">
       <p className="text-muted">Pilih perangkat untuk menampilkan GUI aslinya di ruang kerja ini. HP/laptop cukup mengakses domain NMS melalui HTTPS.</p>
       {error && <div className="alert alert-danger" role="alert">{accessErrors[error] || 'Portal belum dapat menyelesaikan permintaan.'}</div>}
       {catalog && !catalog.enabled && <div className="alert alert-info">Runtime akses belum diaktifkan. Aktivasi perubahan NMS dan reverse proxy menunggu persetujuan pengelola.</div>}
       <div className="d-flex flex-wrap gap-2">{catalog?.targets.map((target) => <button key={target.id} className={`btn ${session?.target === target.id ? 'btn-primary' : 'btn-outline-primary'}`} disabled={!catalog.enabled || !target.allowed || busy} title={target.allowed ? target.url : 'Belum diizinkan untuk akun atau perangkat ini'} onClick={() => open(target.id)}>{target.name}</button>)}</div>
     </Panel>
-    {session && <Panel title={selected?.name || 'GUI perangkat'} subtitle={`Sesi ${state === 'connected' ? 'terhubung' : session.state === 'starting' ? 'sedang disiapkan' : state} Â· Berakhir ${formatTime(session.expires_at)}`} action={<button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={close}>Tutup sesi</button>}>
-      {session.state === 'ready' ? <NativeDisplay key={session.id} session={session} onState={setState} onActivity={activity} /> : <div className="py-5 text-center" role="status">{session.state === 'failed' ? 'Browser sesi gagal dimulai. Tutup sesi lalu periksa runtime.' : <><span className="spinner-border text-primary" /><p className="mt-3">Menyiapkan GUI asliâ€¦</p></>}</div>}
+    {session && <Panel title={selected?.name || 'GUI perangkat'} subtitle={`Sesi ${state === 'connected' ? 'terhubung' : session.state === 'starting' ? 'sedang disiapkan' : state} · Berakhir ${formatTime(session.expires_at)}`} action={<button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={close}>Tutup sesi</button>}>
+      {session.state === 'ready' ? <NativeDisplay key={session.id} session={session} onState={setState} onActivity={activity} /> : <div className="py-5 text-center" role="status">{session.state === 'failed' ? 'Browser sesi gagal dimulai. Tutup sesi lalu periksa runtime.' : <><span className="spinner-border text-primary" /><p className="mt-3">Menyiapkan GUI asli…</p></>}</div>}
       {session.state === 'ready' && <AccessFiles session={session} />}
     </Panel>}
     {!session && <div className="alert alert-secondary">Sesi GUI dipisahkan per login dan berakhir otomatis saat tidak digunakan. Hak di dalam perangkat mengikuti akun asli perangkat tersebut.</div>}
     {admin && <Panel title="Audit akses GUI" action={<button className="btn btn-sm btn-outline-secondary" disabled={!catalog?.enabled} onClick={() => accessRequest('/audit').then((v) => setAudit(v.items)).catch((e) => setError(e.message))}>Muat log akses</button>}>
-      {audit ? <div className="table-responsive"><table className="table table-sm"><thead><tr><th>Waktu</th><th>Pengguna</th><th>Perangkat</th><th>Kejadian</th><th>Alasan</th></tr></thead><tbody>{audit.map((r, i) => <tr key={i}><td>{formatTime(r.at)}</td><td>{r.actor}</td><td>{r.target}</td><td>{r.event}</td><td>{r.reason || 'â€”'}</td></tr>)}</tbody></table></div> : <p className="small text-muted mb-0">Log mencatat pembukaan, penutupan dan penolakan akses. Password, input dan isi tampilan GUI tidak dicatat.</p>}
+      {audit ? <div className="table-responsive"><table className="table table-sm"><thead><tr><th>Waktu</th><th>Pengguna</th><th>Perangkat</th><th>Kejadian</th><th>Alasan</th></tr></thead><tbody>{audit.map((r, i) => <tr key={i}><td>{formatTime(r.at)}</td><td>{r.actor}</td><td>{r.target}</td><td>{r.event}</td><td>{r.reason || '—'}</td></tr>)}</tbody></table></div> : <p className="small text-muted mb-0">Log mencatat pembukaan, penutupan dan penolakan akses. Password, input dan isi tampilan GUI tidak dicatat.</p>}
     </Panel>}
   </>
 }

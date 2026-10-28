@@ -29,9 +29,11 @@ class Platform:
                 CREATE TABLE IF NOT EXISTS annotations(incident TEXT PRIMARY KEY,actor TEXT NOT NULL,at REAL NOT NULL,note TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS platform_metadata(key TEXT PRIMARY KEY,value TEXT NOT NULL);
                 CREATE TABLE IF NOT EXISTS inventory_sources(host TEXT PRIMARY KEY,inventory_id TEXT NOT NULL,primary_target TEXT NOT NULL,targets TEXT NOT NULL);''')
+            db.execute('''CREATE TABLE IF NOT EXISTS platform_requests(actor TEXT NOT NULL,request_key TEXT NOT NULL,
+                payload_hash TEXT NOT NULL,response TEXT NOT NULL,created REAL NOT NULL,PRIMARY KEY(actor,request_key))''')
             if config and not db.execute('SELECT 1 FROM platform_settings').fetchone():
                 value={key:getattr(config,key) for key in ('poll_interval','network_interval','cpu_threshold','memory_threshold','storage_threshold','cooldown','retention_days','alerts')}
-                value.update(identity='NMS Homelab',timezone='Asia/Jakarta',date_format='id-ID',allowed_hosts=self.configured_hosts())
+                value.update(identity='THEAZ NMS',timezone='Asia/Jakarta',date_format='id-ID',allowed_hosts=self.configured_hosts())
                 db.execute('INSERT INTO platform_settings VALUES(1,1,?,NULL)',(json.dumps(value),))
             if config and not db.execute("SELECT 1 FROM platform_metadata WHERE key='seeded'").fetchone():
                 now=time.time()
@@ -148,11 +150,14 @@ class Platform:
         return value
 
     def save(self,collection,body,actor,identity=None):
-        models.fields(body,('revision','value','authorize_host'),('value',))
+        models.fields(body,('revision','value','authorize_host','request_id'),('value',))
+        request_key=body.get('request_id')
+        if 'request_id' in body and (collection!='topologies' or not isinstance(request_key,str) or not __import__('re').fullmatch(r'[a-f0-9]{32}',request_key)):raise ValueError('invalid_request_id')
         authorize=models.boolean(body.get('authorize_host',False))
         if authorize and collection!='inventory':raise ValueError('invalid_fields')
         address=models.host(body['value'].get('host','')) if authorize else None
         value=self.validate(collection,body['value'],[address] if address else []);now=time.time()
+        request_hash=hashlib.sha256(json.dumps({'id':identity,'revision':body.get('revision'),'value':value},sort_keys=True).encode()).hexdigest()
         if collection=='integrations' and value['monitor_enabled'] and value['enabled'] and sum(1 for r in self.list(collection) if r['id']!=identity and r['monitor_enabled'] and r['enabled'])>=40:raise ValueError('monitor_limit')
         if collection=='inventory':
             from app.monitoring.inventory import scheduled
@@ -161,6 +166,12 @@ class Platform:
             revision=models.integer(body.get('revision'),1,10**9)
         else:identity=collection[:3]+'_'+secrets.token_hex(12);revision=0
         with self.db() as db:
+            if request_key:
+                db.execute('BEGIN IMMEDIATE')
+                previous=db.execute('SELECT payload_hash,response FROM platform_requests WHERE actor=? AND request_key=?',(actor,request_key)).fetchone()
+                if previous:
+                    if previous[0]!=request_hash:raise Conflict()
+                    return json.loads(previous[1])
             if collection=='inventory' and db.execute("SELECT 1 FROM objects WHERE collection='inventory' AND json_extract(payload,'$.host')=? AND id<>?",(value['host'],identity)).fetchone():raise Conflict()
             if revision:
                 result=db.execute('UPDATE objects SET revision=revision+1,payload=?,updated=? WHERE collection=? AND id=? AND revision=?',(json.dumps(value),now,collection,identity,revision))
@@ -176,6 +187,11 @@ class Platform:
                     db.execute('UPDATE platform_settings SET payload=?,revision=revision+1 WHERE id=1',(json.dumps(cfg),))
                     self.audit(db,actor,'settings.authorize_host',identity,address)
             self.audit(db,actor,collection+'.'+('update' if revision else 'create'),identity,f'revision:{revision+1}')
+            if request_key:
+                result=self.item(db.execute('SELECT * FROM objects WHERE collection=? AND id=?',(collection,identity)).fetchone())
+                db.execute('INSERT INTO platform_requests VALUES(?,?,?,?,?)',(actor,request_key,request_hash,json.dumps(result),now))
+                db.execute('DELETE FROM platform_requests WHERE created<?',(now-7*86400,))
+                db.execute('DELETE FROM platform_requests WHERE actor=? AND request_key NOT IN (SELECT request_key FROM platform_requests WHERE actor=? ORDER BY created DESC LIMIT 1000)',(actor,actor))
         return self.get(collection,identity)
 
     def remove(self,collection,identity,revision,actor,detach=False):

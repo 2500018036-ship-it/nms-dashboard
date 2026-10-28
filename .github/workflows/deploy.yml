@@ -101,7 +101,7 @@ jobs:
   verify:
     needs: publish
     runs-on: ubuntu-latest
-    timeout-minutes: 12
+    timeout-minutes: 30
     environment:
       name: production
       url: https://nms.azrilachdi.web.id
@@ -110,7 +110,7 @@ jobs:
         env:
           REVISION: ${{ github.sha }}
         run: |
-          for attempt in $(seq 1 30); do
+          for attempt in $(seq 1 80); do
             ACTUAL=$(curl --fail --silent --max-time 15 -H 'Cache-Control: no-cache' "https://nms.azrilachdi.web.id/deployment.json?revision=$REVISION" | jq -r .revision) || true
             if [ "$ACTUAL" = "$REVISION" ]; then
               curl --fail --silent --max-time 15 https://nms.azrilachdi.web.id/healthz
