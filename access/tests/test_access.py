@@ -1,11 +1,12 @@
 import asyncio
 from contextlib import closing
 import json
+import time
 from pathlib import Path
 import tempfile
 import unittest
 from unittest.mock import AsyncMock, patch
-from aiohttp import web
+from aiohttp import FormData, web
 from aiohttp.test_utils import TestClient, TestServer
 from theaz_access import egress
 from theaz_access.gateway import Gateway, Session, app
@@ -48,7 +49,7 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
 
     async def asyncTearDown(self):
         for item in self.gateway.sessions.values():
-            item.proxy.close();await item.proxy.wait_closed()
+            if item.proxy:item.proxy.close();await item.proxy.wait_closed()
         await self.client.close()
         import gc;gc.collect()
         self.tmp.cleanup()
@@ -78,3 +79,29 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         self.owner['user']['role']='Network Administrator'
         r=await self.client.get('/access-api/audit',headers=self.headers)
         self.assertEqual(r.status,403)
+
+    async def test_expired_session_is_removed_even_when_broker_is_unavailable(self):
+        identity='c'*32
+        self.gateway.sessions[identity]=Session(identity,'mikrotik','admin','owner-binding',0,1,0,'private-cookie',None)
+        self.gateway.control=AsyncMock(side_effect=web.HTTPServiceUnavailable())
+        response=await self.client.get('/access-api/sessions/'+identity,headers=self.headers)
+        self.assertEqual(response.status,410)
+        self.assertNotIn(identity,self.gateway.sessions)
+        self.gateway.control.assert_awaited_once()
+
+    async def test_files_are_owner_only_and_profiles_cannot_be_downloaded(self):
+        identity='d'*32
+        self.gateway.sessions[identity]=Session(identity,'mikrotik','admin','owner-binding',time.time(),9999999999,time.time(),'private-cookie',None)
+        root=self.root/identity;root.mkdir()
+        body=FormData();body.add_field('file',b'fixture-config',filename='router.cfg',content_type='application/octet-stream')
+        response=await self.client.post('/access-api/sessions/'+identity+'/upload',data=body,headers=self.headers)
+        self.assertEqual(response.status,200)
+        self.assertTrue((await response.json())['remote_path'].startswith('/run/session/uploads/'))
+        downloads=root/'downloads';downloads.mkdir();(downloads/'backup.cfg').write_bytes(b'fixture-download')
+        response=await self.client.get('/access-api/sessions/'+identity+'/downloads/backup.cfg',headers=self.headers)
+        self.assertEqual(await response.read(),b'fixture-download')
+        response=await self.client.get('/access-api/sessions/'+identity+'/downloads/%2e%2e%2fprofile',headers=self.headers)
+        self.assertNotEqual(response.status,200)
+        self.gateway.auth=AsyncMock(return_value={**self.owner,'binding':'other-login'})
+        response=await self.client.get('/access-api/sessions/'+identity+'/downloads/backup.cfg',headers=self.headers)
+        self.assertEqual(response.status,403)

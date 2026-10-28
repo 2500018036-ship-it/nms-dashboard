@@ -9,7 +9,7 @@ import re
 import secrets
 import sqlite3
 import time
-from aiohttp import ClientSession, ClientTimeout, UnixConnector, WSMsgType, web
+from aiohttp import ClientError, ClientSession, ClientTimeout, UnixConnector, WSMsgType, web
 from . import egress
 from .policy import check_sid, load
 
@@ -64,6 +64,8 @@ class Gateway:
                 value = json.loads(raw)
                 if not value['enabled']:
                     raise web.HTTPServiceUnavailable(text='access_not_activated')
+                if not re.fullmatch(r'[a-f0-9]{64}', value.get('binding', '')) or not value['user']['username'] or value['expires_at'] <= time.time():
+                    raise ValueError('invalid_authorization')
                 return value
         except web.HTTPException:
             raise
@@ -116,9 +118,14 @@ class Gateway:
         if item:
             for socket in list(item.sockets):
                 await socket.close(code=1008, message=b'session_ended')
-            item.proxy.close()
-            await item.proxy.wait_closed()
-            await self.control('DELETE', '/workers/' + identity)
+            if item.proxy:
+                item.proxy.close()
+                await item.proxy.wait_closed()
+            try:
+                await self.control('DELETE', '/workers/' + identity)
+            except (ClientError, OSError, web.HTTPException):
+                # Revoke display immediately; the broker lease also removes orphaned workers.
+                self.record(item.actor, item.target, identity, 'access.cleanup_pending', 'broker_unavailable')
             self.sessions.pop(identity, None)
             self.record(item.actor, item.target, identity, 'access.stopped', reason)
 
@@ -143,7 +150,7 @@ class Gateway:
                         await self.close(identity, reason)
                     else:
                         await self.control('POST', '/workers/' + identity + '/lease', {})
-                except (OSError, web.HTTPException):
+                except (ClientError, OSError, web.HTTPException):
                     # Broker independently expires orphaned workers after 90 seconds.
                     pass
 
@@ -163,6 +170,9 @@ def app(gateway):
             return response
         except (ValueError, KeyError):
             raise web.HTTPBadRequest(text='invalid_request') from None
+
+    async def health(request):
+        return web.json_response({'status': 'UP'})
 
     async def catalog(request):
         user = await gateway.auth(request.headers.get('Cookie', ''))
@@ -270,7 +280,7 @@ def app(gateway):
 
     application = web.Application(middlewares=[guarded], client_max_size=16*1024*1024)
     prefix = '/access-api'
-    application.router.add_get(prefix + '/healthz', lambda r: web.json_response({'status':'UP'}))
+    application.router.add_get(prefix + '/healthz', health)
     application.router.add_get(prefix + '/catalog', catalog)
     application.router.add_post(prefix + '/sessions', create)
     application.router.add_get(prefix + '/sessions/{id}', status)

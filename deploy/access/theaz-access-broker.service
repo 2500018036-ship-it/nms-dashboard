@@ -13,12 +13,15 @@ WorkingDirectory=/opt/theaz_access
 Restart=on-failure
 RestartSec=5
 UMask=0007
+RuntimeDirectory=theaz_access
+RuntimeDirectoryMode=0750
 NoNewPrivileges=true
 PrivateTmp=true
 ProtectHome=true
 ProtectSystem=strict
 ReadWritePaths=/run/theaz_access /var/lib/theaz_access/sessions
 ReadOnlyPaths=/mnt/data/www/nms-bot/data/platform.sqlite3
+ReadOnlyPaths=/var/lib/nms-dashboard-deploy/access-worker-image
 
 [Install]
 WantedBy=multi-user.target

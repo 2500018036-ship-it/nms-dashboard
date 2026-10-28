@@ -35,7 +35,7 @@ async def main():
     bridge=subprocess.check_output(['docker','network','inspect','bridge','--format','{{(index .IPAM.Config 0).Gateway}}'],text=True).strip()
     with tempfile.TemporaryDirectory(prefix='theaz-access-smoke-') as directory:
         root=Path(directory);root.chmod(0o700);os.chown(root,31000,31000)
-        (root/'start.json').write_text(json.dumps({'url':f'http://{bridge}:18090/','tls_spki':[]}))
+        (root/'start.json').write_text(json.dumps({'url':f'http://{bridge}:18090/','tls_spki':[],'diagnostics':True}))
         proxy=await serve(root/'egress.sock',f'http://{bridge}:18090/')
         os.chown(root/'egress.sock',31000,31000);os.chmod(root/'egress.sock',0o600)
         name='theaz-access-smoke'
@@ -50,7 +50,6 @@ async def main():
                 if (root/'state.json').exists() and json.loads((root/'state.json').read_text()).get('state')=='failed':
                     # Only fixture traffic is present; useful CI diagnostics, no production data.
                     diagnostic = root/'fixture-runtime.log'
-                    subprocess.run(['docker','cp',name+':/tmp/browser-runtime.log',str(diagnostic)],check=False)
                     if diagnostic.exists():print(diagnostic.read_text(errors='replace'),flush=True)
                     raise AssertionError('Browser sandbox/runtime failed')
                 await asyncio.sleep(0.5)

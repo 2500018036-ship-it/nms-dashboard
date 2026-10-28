@@ -11,7 +11,9 @@ children = []
 
 
 def launch(args, env=None):
-    log = open('/tmp/browser-runtime.log', 'ab')
+    # Fixture-only diagnostics survive a failed test container's tmpfs teardown.
+    # The broker never enables this flag for real device sessions.
+    log = open(root / 'fixture-runtime.log' if config.get('diagnostics') else '/tmp/browser-runtime.log', 'ab')
     child = subprocess.Popen(args, stdout=log, stderr=log, env=env)
     log.close()
     children.append(child)

@@ -29,7 +29,7 @@ def destination(method, raw_url, selected):
     scheme, host, port = origin(selected)
     if method == 'CONNECT':
         url = urlsplit('https://' + raw_url)
-        if scheme != 'https' or url.hostname != host or (url.port or 443) != port or url.username or url.password or url.path:
+        if scheme != 'https' or url.hostname != host or (url.port or 443) != port or url.username or url.password or url.path or url.query or url.fragment:
             raise ValueError('origin_denied')
         return host, port, None
     url = urlsplit(raw_url)

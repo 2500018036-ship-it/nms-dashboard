@@ -18,10 +18,10 @@ function NativeDisplay({ session, onState, onActivity }) {
       client.scaleViewport = true
       client.resizeSession = false
       client.background = '#101318'
-      client.addEventListener('connect', () => onState('connected'))
-      client.addEventListener('disconnect', () => { onState('disconnected'); container.current?.replaceChildren() })
-      client.addEventListener('securityfailure', () => onState('failed'))
-    }).catch(() => onState('failed'))
+      client.addEventListener('connect', () => { if (!cancelled) onState('connected') })
+      client.addEventListener('disconnect', () => { if (!cancelled) { onState('disconnected'); container.current?.replaceChildren() } })
+      client.addEventListener('securityfailure', () => { if (!cancelled) onState('failed') })
+    }).catch(() => { if (!cancelled) onState('failed') })
     return () => { cancelled = true; client?.disconnect(); rfb.current = null }
   }, [session.id, session.websocket_path, onState])
   const key = (symbol, code) => { rfb.current?.sendKey(symbol, code); onActivity() }
@@ -87,7 +87,10 @@ export function AccessPortalPage() {
     if (!session) return
     setBusy(true)
     try { await accessRequest('/sessions/' + session.id, 'DELETE'); current.current = null; setSession(null); setState('idle') }
-    catch (e) { setError(e.message) } finally { setBusy(false) }
+    catch (e) {
+      if (['session_not_found', 'session_expired'].includes(e.message)) { current.current = null; setSession(null); setState('idle') }
+      else setError(e.message)
+    } finally { setBusy(false) }
   }
   const selected = catalog?.targets.find((t) => t.id === session?.target)
   const admin = platform.capabilities.permissions?.includes('config.manage')

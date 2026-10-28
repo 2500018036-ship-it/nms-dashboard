@@ -3,6 +3,7 @@ import asyncio
 from contextlib import closing
 import json
 import os
+import re
 from pathlib import Path
 import shutil
 import sqlite3
@@ -57,12 +58,17 @@ class Broker:
             start.write_text(json.dumps({'url': selected['url'], 'tls_spki': selected.get('tls_spki', [])}))
             start.chmod(0o644)
             try:
+                image = self.image
+                if os.getenv('ACCESS_WORKER_IMAGE_FILE'):
+                    image = Path(os.environ['ACCESS_WORKER_IMAGE_FILE']).read_text().strip()
+                    if not re.fullmatch(r'theaz-access-worker:[a-f0-9]{40}', image):
+                        raise ValueError('invalid_worker_image')
                 await self.docker('run', '-d', '--name', 'theaz-access-' + identity,
                     '--label', 'theaz.access.managed=true', '--network', 'none', '--user', '31000:31000',
                     '--read-only', '--init', '--cap-drop', 'ALL', '--security-opt', 'no-new-privileges:true',
                     '--security-opt', 'seccomp=' + self.seccomp, '--memory', '1g', '--cpus', '0.75',
                     '--pids-limit', '256', '--shm-size', '128m', '--tmpfs', '/tmp:rw,nosuid,nodev,size=128m,mode=1777',
-                    '--mount', f'type=bind,src={directory},dst=/run/session', self.image)
+                    '--mount', f'type=bind,src={directory},dst=/run/session', image)
             except BaseException:
                 self.erase(identity)
                 raise

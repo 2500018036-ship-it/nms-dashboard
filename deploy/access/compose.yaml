@@ -29,6 +29,12 @@ services:
     mem_limit: 192m
     cpus: 0.25
     pids_limit: 64
+    healthcheck:
+      test: [CMD, python, -c, "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8081/access-api/healthz',timeout=3).read()"]
+      interval: 15s
+      timeout: 5s
+      retries: 4
+      start_period: 10s
     logging:
       driver: json-file
       options: {max-size: "5m", max-file: "2"}

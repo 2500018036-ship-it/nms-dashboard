@@ -38,8 +38,11 @@ jobs:
           docker build --target test -t nms-backend-tests ./backend
           docker run --rm --network none nms-backend-tests
 
+  access-test:
+    uses: ./.github/workflows/access-portal.yml
+
   publish:
-    needs: [test, backend-test]
+    needs: [test, backend-test, access-test]
     if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
     runs-on: ubuntu-latest
     timeout-minutes: 20
@@ -53,6 +56,8 @@ jobs:
         run: |
           docker build --build-arg "VCS_REF=$REVISION" -t "nms-dashboard:$REVISION" .
           docker build --target production --build-arg "VCS_REF=$REVISION" -t "nms-backend:$REVISION" ./backend
+          docker build --build-arg "VCS_REF=$REVISION" -t "theaz-access-gateway:$REVISION" ./access
+          docker build --build-arg "VCS_REF=$REVISION" -f access/worker/Dockerfile -t "theaz-access-worker:$REVISION" ./access
       - name: Smoke test production container
         env:
           REVISION: ${{ github.sha }}
@@ -72,9 +77,9 @@ jobs:
           GH_TOKEN: ${{ github.token }}
           REVISION: ${{ github.sha }}
         run: |
-          docker save "nms-dashboard:$REVISION" "nms-backend:$REVISION" | gzip -1 > nms-dashboard-image.tar.gz
+          docker save "nms-dashboard:$REVISION" "nms-backend:$REVISION" "theaz-access-gateway:$REVISION" "theaz-access-worker:$REVISION" | gzip -1 > nms-dashboard-image.tar.gz
           CHECKSUM=$(sha256sum nms-dashboard-image.tar.gz | cut -d ' ' -f 1)
-          jq -n --arg revision "$REVISION" --arg checksum "$CHECKSUM" '{revision:$revision,sha256:$checksum,backend:true}' > deployment.json
+          jq -n --arg revision "$REVISION" --arg checksum "$CHECKSUM" '{revision:$revision,sha256:$checksum,backend:true,access:true}' > deployment.json
           TAG="deploy-$REVISION"
           if gh release view "$TAG" >/dev/null 2>&1; then
             gh release edit "$TAG" --latest
