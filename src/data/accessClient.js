@@ -10,6 +10,7 @@ export const accessErrors = {
   session_owner_mismatch: 'Sesi GUI ini dimiliki sesi login lain.',
   display_not_ready: 'Tampilan GUI belum siap.',
   unavailable: 'Portal akses belum dapat dijangkau.',
+  upload_quota_reached: 'Kuota unggah sesi 32 MiB telah terpakai. Mulai sesi baru untuk melanjutkan.',
 }
 
 export async function accessRequest(path, method = 'GET', body) {

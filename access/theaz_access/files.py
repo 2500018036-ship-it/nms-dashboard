@@ -8,6 +8,7 @@ import stat
 from aiohttp import web
 
 MAX_FILE = 15 * 1024 * 1024
+MAX_UPLOAD_TOTAL = 32 * 1024 * 1024
 
 
 def folder(gateway, item, kind):
@@ -41,6 +42,7 @@ def routes(application, gateway):
             raise web.HTTPBadRequest(text='invalid_file')
         name = secrets.token_hex(4) + '-' + name
         size = 0
+        stored = 0
         with directory(gateway, item, 'uploads') as descriptor:
             try:
                 file = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=descriptor)
@@ -49,10 +51,15 @@ def routes(application, gateway):
                         size += len(chunk)
                         if size > MAX_FILE:
                             raise web.HTTPRequestEntityTooLarge(max_size=MAX_FILE, actual_size=size)
+                        if item.uploaded_bytes + len(chunk) > MAX_UPLOAD_TOTAL:
+                            raise web.HTTPRequestEntityTooLarge(max_size=MAX_UPLOAD_TOTAL, actual_size=item.uploaded_bytes + len(chunk), text='upload_quota_reached')
                         stream.write(chunk)
+                        stored += len(chunk)
+                        item.uploaded_bytes += len(chunk)
                 if await reader.next() is not None:
                     raise web.HTTPBadRequest(text='one_file_required')
             except BaseException:
+                item.uploaded_bytes -= stored
                 try:os.unlink(name, dir_fd=descriptor)
                 except FileNotFoundError:pass
                 raise

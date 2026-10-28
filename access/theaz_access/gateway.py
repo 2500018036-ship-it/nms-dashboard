@@ -26,6 +26,7 @@ class Session:
     cookie: str = field(repr=False)
     proxy: object = field(repr=False)
     sockets: set = field(default_factory=set, repr=False)
+    uploaded_bytes: int = 0
 
 
 class Gateway:

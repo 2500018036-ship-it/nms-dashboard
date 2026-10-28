@@ -18,7 +18,10 @@ async def main():
     broker=Broker(config,'/unused',image,'/unused',os.environ['ACCESS_INVENTORY_DB'])
     results=[]
     for target in config['targets']:
-        selected=broker.selected(target['id'])
+        try:selected=broker.selected(target['id'])
+        except (ValueError, OSError) as error:
+            value={'target':target['id'],'exit':1,'browser_error':True,'error':type(error).__name__,'authenticated_login':'NOT_TESTED'}
+            results.append(value);print(json.dumps(value),flush=True);continue
         with tempfile.TemporaryDirectory(prefix='theaz-native-page-') as directory:
             root=Path(directory);os.chown(root,31000,31000);root.chmod(0o700)
             (root/'start.json').write_text(json.dumps(selected))
@@ -36,6 +39,9 @@ async def main():
                 value=json.loads((root/'result.json').read_text()) if (root/'result.json').exists() else {'exit':process.returncode,'browser_error':True}
                 value.update({'target':target['id'],'url':selected['url'],'authenticated_login':'NOT_TESTED'})
                 if (root/'page.png').exists():shutil.copyfile(root/'page.png',output/(target['id']+'.png'))
+                results.append(value);print(json.dumps(value),flush=True)
+            except (TimeoutError, OSError, ValueError) as error:
+                value={'target':target['id'],'url':selected['url'],'exit':1,'browser_error':True,'error':type(error).__name__,'authenticated_login':'NOT_TESTED'}
                 results.append(value);print(json.dumps(value),flush=True)
             finally:
                 await asyncio.to_thread(subprocess.run,['docker','rm','-f',name],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL)

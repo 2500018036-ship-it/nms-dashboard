@@ -112,6 +112,12 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertEqual(response.status,403)
         response=await self.client.get('/access-api/sessions/'+identity+'/downloads/%2e%2e%2fprofile',headers=self.headers)
         self.assertNotEqual(response.status,200)
+        from theaz_access.files import MAX_UPLOAD_TOTAL
+        self.gateway.sessions[identity].uploaded_bytes=MAX_UPLOAD_TOTAL
+        body=FormData();body.add_field('file',b'above-budget',filename='extra.cfg',content_type='application/octet-stream')
+        response=await self.client.post('/access-api/sessions/'+identity+'/upload',data=body,headers=self.headers)
+        self.assertEqual(response.status,413)
+        self.assertEqual(len(list((root/'uploads').iterdir())),1)
         self.gateway.auth=AsyncMock(return_value={**self.owner,'binding':'other-login'})
         response=await self.client.get('/access-api/sessions/'+identity+'/downloads/backup.cfg',headers=self.headers)
         self.assertEqual(response.status,403)

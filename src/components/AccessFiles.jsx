@@ -14,13 +14,13 @@ export function AccessFiles({ session }) {
     try {
       const body = new FormData(); body.append('file', file)
       const response = await fetch('/access-api/sessions/' + session.id + '/upload', { method: 'POST', body, credentials: 'same-origin', redirect: 'error' })
-      if (!response.ok) throw new Error('unavailable')
+      if (!response.ok) { const error = (await response.text()).slice(0, 120).trim(); throw new Error(Object.hasOwn(accessErrors, error) ? error : 'unavailable') }
       const value = await response.json()
       setMessage('Berkas tersedia di ' + value.remote_path + '. Pilih lokasi ini dari dialog unggah GUI asli.')
     } catch (e) { setMessage(accessErrors[e.message] || accessErrors.unavailable) } finally { setBusy(false); input.value = '' }
   }
   return <details className="border rounded p-3 mt-3"><summary>Berkas sesi GUI</summary>
-    <p className="small text-muted mt-2">Berkas berada di sesi privat dan dihapus saat sesi ditutup. Maksimum 15 MiB per berkas.</p>
+    <p className="small text-muted mt-2">Berkas berada di sesi privat dan dihapus saat sesi ditutup. Maksimum 15 MiB per berkas dan 32 MiB unggahan per sesi.</p>
     <div className="d-flex flex-wrap gap-2 align-items-center"><label className="btn btn-sm btn-outline-secondary mb-0">Unggah ke sesi<input className="visually-hidden" type="file" disabled={busy} onChange={upload} /></label>
       <button className="btn btn-sm btn-outline-secondary" onClick={() => accessRequest('/sessions/' + session.id + '/downloads').then((v) => setFiles(v.items)).catch((e) => setMessage(accessErrors[e.message] || accessErrors.unavailable))}>Lihat hasil unduhan GUI</button></div>
     {message && <p className="small mt-2 mb-0" role="status">{message}</p>}
