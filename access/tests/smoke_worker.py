@@ -2,6 +2,7 @@
 import asyncio
 import json
 import os
+import socket
 from pathlib import Path
 import subprocess
 import tempfile
@@ -31,12 +32,14 @@ async def main():
         return connection
     application=web.Application();application.router.add_get('/',first);application.router.add_get('/native/gui',gui);application.router.add_get('/native/ws',ws)
     runner=web.AppRunner(application,access_log=None);await runner.setup()
-    site=web.TCPSite(runner,'0.0.0.0',18090);await site.start()
     bridge=subprocess.check_output(['docker','network','inspect','bridge','--format','{{(index .IPAM.Config 0).Gateway}}'],text=True).strip()
+    listener=socket.socket();listener.bind((bridge,0));listener.listen(128);listener.setblocking(False)
+    fixture_url=f'http://{bridge}:{listener.getsockname()[1]}/'
+    site=web.SockSite(runner,listener);await site.start()
     with tempfile.TemporaryDirectory(prefix='theaz-access-smoke-') as directory:
         root=Path(directory);root.chmod(0o700);os.chown(root,31000,31000)
-        (root/'start.json').write_text(json.dumps({'url':f'http://{bridge}:18090/','tls_spki':[],'diagnostics':True}))
-        proxy=await serve(root/'egress.sock',f'http://{bridge}:18090/')
+        (root/'start.json').write_text(json.dumps({'url':fixture_url,'tls_spki':[],'diagnostics':True}))
+        proxy=await serve(root/'egress.sock',fixture_url)
         os.chown(root/'egress.sock',31000,31000);os.chmod(root/'egress.sock',0o600)
         name='theaz-access-smoke'
         command=['docker','run','-d','--name',name,'--network','none','--user','31000:31000','--read-only','--init',

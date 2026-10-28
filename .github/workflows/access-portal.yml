@@ -6,6 +6,7 @@ on:
   workflow_call:
 permissions:
   contents: read
+  actions: read
 jobs:
   validate:
     runs-on: ubuntu-latest
@@ -25,8 +26,8 @@ jobs:
           PYTHONPATH=access /tmp/access-tests/bin/python -m unittest discover -s access/tests -p 'test_*.py' -v
       - name: Build private gateway and sandboxed browser
         run: |
-          docker build -t theaz-access-gateway:test ./access
-          docker build -f access/worker/Dockerfile -t theaz-access-worker:test ./access
+          docker build --build-arg "VCS_REF=$GITHUB_SHA" -t theaz-access-gateway:test ./access
+          docker build --build-arg "VCS_REF=$GITHUB_SHA" -f access/worker/Dockerfile -t theaz-access-worker:test ./access
       - name: Verify native redirects, cookies, WebSocket and display with real Chromium
         run: sudo env PYTHONPATH=access /tmp/access-tests/bin/python access/tests/smoke_worker.py
       - name: Package reviewed browser images
@@ -36,3 +37,18 @@ jobs:
           name: theaz-access-review-images
           path: theaz-access-review-images.tar.gz
           retention-days: 7
+  artifact-test:
+    needs: validate
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Verify the release can load the exact tested images
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ github.sha }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name theaz-access-review-images --dir /tmp/access-artifact
+          docker load --input /tmp/access-artifact/theaz-access-review-images.tar.gz
+          for portal_image in theaz-access-gateway theaz-access-worker; do
+            test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$portal_image:test")" = "$REVISION"
+          done

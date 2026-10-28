@@ -8,6 +8,7 @@ on:
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: nms-${{ github.workflow }}-${{ github.ref }}
@@ -48,16 +49,26 @@ jobs:
     timeout-minutes: 20
     permissions:
       contents: write
+      actions: read
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+      - name: Load the exact browser images validated by the access job
+        env:
+          GH_TOKEN: ${{ github.token }}
+          REVISION: ${{ github.sha }}
+        run: |
+          gh run download "$GITHUB_RUN_ID" --repo "$GITHUB_REPOSITORY" --name theaz-access-review-images --dir /tmp/access-artifact
+          docker load --input /tmp/access-artifact/theaz-access-review-images.tar.gz
+          for portal_image in theaz-access-gateway theaz-access-worker; do
+            test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$portal_image:test")" = "$REVISION"
+            docker tag "$portal_image:test" "$portal_image:$REVISION"
+          done
       - name: Build production Docker image
         env:
           REVISION: ${{ github.sha }}
         run: |
           docker build --build-arg "VCS_REF=$REVISION" -t "nms-dashboard:$REVISION" .
           docker build --target production --build-arg "VCS_REF=$REVISION" -t "nms-backend:$REVISION" ./backend
-          docker build --build-arg "VCS_REF=$REVISION" -t "theaz-access-gateway:$REVISION" ./access
-          docker build --build-arg "VCS_REF=$REVISION" -f access/worker/Dockerfile -t "theaz-access-worker:$REVISION" ./access
       - name: Smoke test production container
         env:
           REVISION: ${{ github.sha }}
