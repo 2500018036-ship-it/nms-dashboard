@@ -9,7 +9,7 @@ export const endpoints = [
 ]
 export const pendingCapabilities = [
   ['Konfigurasi & credentials', 'Belum ditemukan endpoint penyimpanan konfigurasi atau secret.'],
-  ['Auto-discovery & topology', 'Belum ditemukan API discovery, inventaris permanen, atau hubungan antarperangkat.'],
+  ['Penemuan otomatis & topology', 'Belum ditemukan API discovery, inventaris permanen, atau hubungan antarperangkat.'],
   ['AI assistant web', 'Belum ditemukan endpoint chat AI untuk dashboard.'],
   ['Log monitoring', 'Event monitoring tersedia pada kontrak lama; pengumpulan log mentah belum tersedia.'],
   ['Users & audit administratif', 'Sesi operator read-only tersedia; manajemen multi-user/RBAC dan audit administratif belum tersedia.'],

@@ -9,7 +9,7 @@ export function validateProxyTarget(value) {
 export function isReadOnlyRequest(method, requestUrl, base) {
   if (method !== 'GET') return false
   const path = new URL(requestUrl, 'http://localhost').pathname.slice(base.length)
-  return /^\/api\/platform(?:$|\/(?:access|settings|export|users|audit|report|application-logs|management|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80})?|jobs\/job_[a-f0-9]{24})$)/.test(path) || credentialsPath.test(path) || allowedEndpoints.has(path) || /^\/api\/devices\/device_[a-f0-9]{12}$/.test(path) || /^\/api\/incidents\/inc_(event_[1-9]\d{0,14}|state_[a-f0-9]{20})$/.test(path)
+  return /^\/api\/platform(?:$|\/(?:access|settings|export|users|audit|report|application-logs|assistant-history|management|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80})?|jobs\/job_[a-f0-9]{24})$)/.test(path) || credentialsPath.test(path) || allowedEndpoints.has(path) || /^\/api\/devices\/device_[a-f0-9]{12}$/.test(path) || /^\/api\/incidents\/inc_(event_[1-9]\d{0,14}|state_[a-f0-9]{20})$/.test(path)
 }
 export function isGatewayRequest(method, requestUrl, base) {
   const path = new URL(requestUrl, 'http://localhost').pathname.slice(base.length)

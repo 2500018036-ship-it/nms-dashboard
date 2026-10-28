@@ -1,6 +1,8 @@
 import { Component } from 'react'
 import { Link, Navigate, Outlet, Route, Routes, useLocation } from 'react-router'
 import { useAuth } from '../data/authSessionContext'
+import { TopologyWorkspaceProvider } from '../data/TopologyWorkspaceProvider'
+import { AssistantProvider } from '../data/AssistantProvider'
 import { PlatformProvider } from '../data/PlatformProvider'
 import { MonitoringProvider } from '../data/MonitoringProvider'
 import { errorMessages } from '../data/apiClient'
@@ -55,7 +57,7 @@ export function AppRouter() {
           <Route path="reports" element={<ReportsPage />} />
           <Route path="users" element={<UsersPage />} />
           <Route path="system-health" element={<HealthPage />} />
-          <Route path="*" element={<div className="card text-center p-4"><EmptyState icon="signpost-split" title="Rute tidak ditemukan" description="Gunakan sidebar atau pencarian untuk membuka modul NMS." action={false} /><Link className="btn btn-primary align-self-center" to="/">Kembali ke Overview</Link></div>} />
+          <Route path="*" element={<div className="card text-center p-4"><EmptyState icon="signpost-split" title="Rute tidak ditemukan" description="Gunakan sidebar atau pencarian untuk membuka modul NMS." action={false} /><Link className="btn btn-primary align-self-center" to="/">Kembali ke Ringkasan</Link></div>} />
         </Route>
         </Route>
       </Routes>
@@ -65,8 +67,8 @@ export function AppRouter() {
 
 function ProtectedWorkspace() {
   const { status, error, check } = useAuth(); const location = useLocation()
-  if (status === 'checking') return <main className="container py-5 text-center" aria-live="polite"><span className="spinner-border text-primary mb-3" /><p>Memeriksa sesi dashboardÃ¢â‚¬Â¦</p></main>
+  if (status === 'checking') return <main className="container py-5 text-center" aria-live="polite"><span className="spinner-border text-primary mb-3" /><p>Memeriksa sesi dashboard…</p></main>
   if (status === 'error') return <main className="container py-5"><div className="card mx-auto p-4" style={{ maxWidth: 520 }}><h1 className="h4">Sesi belum dapat diverifikasi</h1><p className="text-muted">{errorMessages[error] || 'Backend belum dapat diakses'}. Data monitoring memerlukan sesi yang valid.</p><button className="btn btn-primary" onClick={check}>Coba hubungkan kembali</button><Link className="btn btn-link mt-2" to="/login" state={{ from: location.pathname }}>Ke halaman masuk</Link></div></main>
   if (status !== 'authenticated') return <Navigate to="/login" replace state={{ from: location.pathname, expired: error === 'session_expired' }} />
-  return <MonitoringProvider><PlatformProvider><Outlet /></PlatformProvider></MonitoringProvider>
+  return <MonitoringProvider><PlatformProvider><AssistantProvider><TopologyWorkspaceProvider><Outlet /></TopologyWorkspaceProvider></AssistantProvider></PlatformProvider></MonitoringProvider>
 }

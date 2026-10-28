@@ -61,8 +61,8 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
   const get = (path, signal) => request(path, signal)
   return {
     platform: (path = '', { body, params = {}, signal } = {}) => {
-      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|ask|management(?:\/read|\/preview|\/plan_[a-f0-9]{24}\/confirm)?|inventory\/import|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
-      const allowed = path === 'report' ? ['target','from','to','resource'] : path === 'audit' ? ['page','q'] : path === 'application-logs' ? ['page','q','level','from','to'] : []
+      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|assistant-history|ask|management(?:\/read|\/preview|\/plan_[a-f0-9]{24}\/confirm)?|inventory\/import|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
+      const allowed = path === 'report' ? ['target','from','to','resource'] : path === 'audit' ? ['page','q'] : path === 'application-logs' ? ['page','q','level','from','to'] : path === 'assistant-history' ? ['before'] : []
       if (!valid || Object.keys(params).some((key) => !allowed.includes(key))) return Promise.reject(new ApiError('target_not_allowed'))
       const query = new URLSearchParams(params)
       return request(`/api/platform${path ? '/' + path : ''}${query.size ? '?' + query : ''}`, signal, body)
@@ -104,7 +104,7 @@ export const errorMessages = {
   invalid_response: 'Format respons API belum sesuai', response_too_large: 'Respons API melewati batas aman',
   invalid_credentials: 'Username atau password tidak sesuai.',
   target_not_allowed: 'Target riwayat tidak diizinkan', cancelled: 'Permintaan dibatalkan',
-  invalid_filter: 'Filter waktu tidak valid. Gunakan waktu WIB, urutan awalÃ¢â‚¬â€œakhir yang benar, dan rentang log maksimum 31 hari.',
+  invalid_filter: 'Filter waktu tidak valid. Gunakan waktu WIB, urutan awal–akhir yang benar, dan rentang log maksimum 31 hari.',
   ai_unavailable: 'Provider AI belum dapat menyelesaikan jawaban. Monitoring dan notifikasi tetap berjalan.',
   permission_denied: 'Role akun ini tidak mengizinkan tindakan tersebut.',
   credential_vault_unavailable: 'Vault kredensial belum siap atau kunci server tidak valid. Kredensial tidak dibaca atau disimpan.',

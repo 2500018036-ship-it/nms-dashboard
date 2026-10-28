@@ -1,7 +1,7 @@
 export const deviceTypes = ['router', 'switch', 'server', 'hypervisor', 'container-host', 'dns', 'vpn', 'service', 'access-point','firewall','iot','generic','other']
 export const methods = ['icmp', 'tcp', 'snmp', 'api', 'agent', 'http', 'dns']
 export const profiles = {
-  connectivity: { label: 'Connectivity', metrics: ['Availability', 'Latency', 'Packet loss jika tersedia'] },
+  connectivity: { label: 'Connectivity', metrics: ['Availability', 'Latensi', 'Packet loss jika tersedia'] },
   network: { label: 'Network interfaces', metrics: ['Interface', 'RX/TX', 'Utilisasi', 'Error/drop jika tersedia'] },
   host: { label: 'Host resources', metrics: ['CPU', 'RAM', 'Disk', 'Uptime'] },
   virtualization: { label: 'Virtualization', metrics: ['Node', 'VM/LXC', 'Storage'] },
@@ -40,7 +40,7 @@ export function validateDevice(input, existing = [], editingId = null) {
   if (existing.some((d) => d.id !== editingId && d.host === value.host)) errors.host = 'Alamat sudah digunakan oleh perangkat lain.'
   if (!deviceTypes.includes(value.type)) errors.type = 'Pilih tipe perangkat.'
   if (!value.methods.length || value.methods.some((m) => !methods.includes(m))) errors.methods = 'Pilih minimal satu metode monitoring yang tersedia.'
-  if (!Number.isInteger(value.interval) || value.interval < 15 || value.interval > 86400) errors.interval = 'Interval harus bilangan bulat 15â€“86400 detik.'
+  if (!Number.isInteger(value.interval) || value.interval < 15 || value.interval > 86400) errors.interval = 'Interval harus bilangan bulat 15–86400 detik.'
   if (typeof value.profile !== 'string' || !Object.hasOwn(profiles, value.profile)) errors.profile = 'Pilih profil monitoring.'
   if (value.vendor.length > 80 || value.model.length > 80) errors.vendor = 'Vendor/model maksimum 80 karakter.'
   if (value.group.length > 48) errors.group = 'Grup maksimum 48 karakter.'
@@ -85,8 +85,8 @@ export function validateScope(value) {
 export const deviceErrorMessage = (error) => ({
   backend_not_integrated: 'Operasi belum terintegrasi dengan backend. Tidak ada perubahan perangkat.',
   validation_failed: 'Konfigurasi belum valid. Periksa field yang ditandai.',
-  invalid_json: 'JSON tidak valid.', invalid_inventory: 'Gunakan schemaVersion 1 dan 1â€“200 perangkat.',
-  import_too_large: 'Ukuran import maksimum 256 KiB.', duplicate_id: 'ID perangkat duplikat.',
-  not_found: 'Perangkat tidak ditemukan.', invalid_scope: 'Gunakan subnet IPv4 /24â€“/32 untuk rancangan discovery ini.',
+  invalid_json: 'JSON tidak valid.', invalid_inventory: 'Gunakan schemaVersion 1 dan 1–200 perangkat.',
+  import_too_large: 'Ukuran impor maksimum 256 KiB.', duplicate_id: 'ID perangkat duplikat.',
+  not_found: 'Perangkat tidak ditemukan.', invalid_scope: 'Gunakan subnet IPv4 /24–/32 untuk rancangan discovery ini.',
   invalid_note: 'Catatan maksimum 300 karakter.',
 }[error.code] || 'Operasi belum dapat diselesaikan.')

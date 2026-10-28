@@ -24,6 +24,8 @@ class PlatformAPI:
         from app.management.service import Management
         self.management=Management(self.store,monitor,loop)
         self.jobs={};self.job_lock=threading.Lock();self.questions=deque();self.probes=deque()
+        from app.dashboard.assistant_history import AssistantHistory
+        self.assistant_history=AssistantHistory(self.store)
 
     @staticmethod
     def permitted(session, roles):
@@ -32,6 +34,12 @@ class PlatformAPI:
         return session['user']['username']
 
     def get(self,path,query,session):
+        if path=='/api/platform/assistant-history':
+            if set(query)-{'before'} or any(len(v)!=1 for v in query.values()):raise ValueError('invalid_query')
+            before=query.get('before',[None])[0]
+            if before and not re.fullmatch(r'job_[a-f0-9]{24}',before):raise ValueError('invalid_query')
+            actor=self.permitted(session,models.ROLES)
+            return self.assistant_history.page(actor,before)
         if path=='/api/platform/access':
             from app.dashboard.access import authorize
             return authorize(self.store,session,query)
@@ -81,9 +89,11 @@ class PlatformAPI:
             self.permitted(session,('Administrator',));return {'users':[{'username':'nms','name':'NMS Operator','role':'Read-only operator','enabled':True,'revision':0}]+self.store.users()}
         if path.startswith('/api/platform/jobs/'):
             identity=path.rsplit('/',1)[-1]
+            actor=self.permitted(session,models.ROLES)
             with self.job_lock:
                 job=self.jobs.get(identity)
-                if not job or not session or job['owner']!=session['user']['username']:raise Missing()
+                if not job:return self.assistant_history.get(actor,identity)
+                if job['owner']!=actor:raise Missing()
                 return {k:v for k,v in job.items() if k!='owner'}
         for collection in models.COLLECTIONS:
             base='/api/platform/'+collection
@@ -136,7 +146,10 @@ class PlatformAPI:
             session={'user':{**session['user'],'role':'Administrator'}}
         if path=='/api/platform/ask':
             self.permitted(session,models.ROLES)
-            models.fields(body,('question',),('question',));return self.ask(models.text(body['question'],1,2000),session['user']['username'])
+            models.fields(body,('question','request_id'),('question',))
+            key=body.get('request_id')
+            if key is not None and (not isinstance(key,str) or not re.fullmatch(r'[a-f0-9]{32}',key)):raise ValueError('invalid_request_id')
+            return self.ask(models.text(body['question'],1,2000),session['user']['username'],key)
         if path.startswith('/api/platform/acknowledge/'):
             from app.dashboard.permissions import require
             actor=require(session,'incidents.manage')
@@ -286,25 +299,30 @@ class PlatformAPI:
         value=asyncio.run(probe('service_'+identity,item['url'],self.store.get_settings()['value']['allowed_hosts']))
         return {k:value[k] for k in ('status','timestamp','method','error','http_status','latency_ms','scope') if k in value}
 
-    def ask(self,question,actor):
-        if not self.agent or not self.loop:raise ValueError('assistant_unavailable')
+    def ask(self,question,actor,request_key=None):
         now=time.time()
         with self.job_lock:
+            if request_key:
+                existing=self.assistant_history.find(actor,request_key,question)
+                if existing:return existing
+            if not self.agent or not self.loop:raise ValueError('assistant_unavailable')
             self.jobs={k:v for k,v in self.jobs.items() if now-v['created_at']<600}
             while self.questions and now-self.questions[0]>60:self.questions.popleft()
             if len(self.questions)>=3 or any(j['state']=='running' for j in self.jobs.values()):raise ValueError('assistant_busy')
             self.questions.append(now);identity='job_'+secrets.token_hex(12)
+            self.assistant_history.start(actor,identity,request_key or identity,question,now)
             self.jobs[identity]={'id':identity,'owner':actor,'state':'running','created_at':now}
-        self.store.log(actor,'assistant.ask',identity)  # Question text is deliberately not persisted.
+        self.store.log(actor,'assistant.ask',identity)  # Audit stores metadata; private conversation history is owner-scoped.
         async def answer():
             token=request_id.set(identity)
             try:return await self.agent.run(question)
             finally:request_id.reset(token)
         future=asyncio.run_coroutine_threadsafe(answer(),self.loop)
-        def finished(f):
-            try:answer=redact(str(f.result()))[:30000];update={'state':'complete','answer':answer}
+        def persist_result(f):
+            try:answer=redact(str(f.result())).encode('utf-8')[:30000].decode('utf-8','ignore');update={'state':'complete','answer':answer}
             except BaseException:update={'state':'failed','error':'ai_unavailable'}
+            self.assistant_history.finish(identity,update)
             with self.job_lock:
                 if identity in self.jobs:self.jobs[identity].update(update,finished_at=time.time())
-        future.add_done_callback(finished)
+        future.add_done_callback(lambda f:threading.Thread(target=persist_result,args=(f,),daemon=True,name='nms-assistant-history').start())
         return {'id':identity,'state':'running','created_at':now}

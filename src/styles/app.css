@@ -1,5 +1,13 @@
 /* Integration helpers only. Layout, typography, color, cards and controls come from Metis. */
 body { font-family: 'Inter Variable', var(--bs-font-sans-serif); }
+.theaz-brand { display: inline-block; width: 164px; height: 48px; overflow: hidden; vertical-align: middle; flex-shrink: 0; }
+.theaz-brand img { width: 100%; height: 100%; object-fit: cover; object-position: center; }
+.theaz-brand-login { width: 260px; height: 82px; }
+.theaz-brand-sidebar { width: 170px; height: 54px; margin: 0 auto 1rem; display: block; }
+.sidebar-collapsed .theaz-brand-sidebar { display: none; }
+.nms-floating-menu { z-index: 1090; overflow-y: auto; overflow-x: hidden; margin: 0; list-style: none; overscroll-behavior: contain; }
+.nms-floating-menu .dropdown-item, .nms-floating-menu .dropdown-item-text { white-space: normal; overflow-wrap: anywhere; }
+@media (max-width: 575.98px) { .navbar-brand .theaz-brand { width: 125px; height: 39px; } .admin-header .navbar .container-fluid { padding-inline: 10px; } .admin-header .navbar-brand { margin-right: 4px; } }
 .admin-main:focus { outline: none; }
 .admin-main, .card, .card-body, .stats-card .flex-grow-1 { min-width: 0; }
 .stats-card .h6 { overflow-wrap: anywhere; }
@@ -40,3 +48,12 @@ body { font-family: 'Inter Variable', var(--bs-font-sans-serif); }
 .font-monospace { font-family: var(--bs-font-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace) !important; }
 .btn-xs { padding: 0.15rem 0.4rem; font-size: 0.75rem; border-radius: 0.25rem; }
 pre code { font-family: inherit; }
+.nms-topology-workspace{display:grid;grid-template-columns:190px minmax(0,1fr);gap:12px;min-width:0}
+.nms-topology-palette{border:1px solid var(--bs-border-color);border-radius:8px;padding:10px;max-height:620px;overflow:auto}
+.nms-topology-symbols{display:grid;gap:6px}.nms-topology-symbols button{display:flex;align-items:center;gap:9px;font-size:12px}
+.nms-topology-canvas-wrap{border:1px solid var(--bs-border-color);border-radius:8px;min-width:0;overflow:hidden}
+.nms-topology-canvas{height:560px;position:relative;overflow:hidden;touch-action:none;background-color:#f8fafc;background-image:radial-gradient(#cbd5e1 1px,transparent 1px);background-size:20px 20px;outline:none}
+.nms-topology-canvas:focus-visible{outline:2px solid var(--bs-primary);outline-offset:-2px}.nms-topology-picker{width:min(100%,320px)}
+@media(max-width:767px){.nms-topology-workspace{grid-template-columns:1fr}.nms-topology-palette{max-height:185px}.nms-topology-symbols{grid-template-columns:repeat(2,minmax(0,1fr))}.nms-topology-canvas{height:440px}}
+
+.theaz-brand-footer{width:90px;height:28px}
