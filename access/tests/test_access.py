@@ -1,6 +1,7 @@
 import asyncio
 from contextlib import closing
 import json
+import os
 import time
 from pathlib import Path
 import tempfile
@@ -105,3 +106,34 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         self.gateway.auth=AsyncMock(return_value={**self.owner,'binding':'other-login'})
         response=await self.client.get('/access-api/sessions/'+identity+'/downloads/backup.cfg',headers=self.headers)
         self.assertEqual(response.status,403)
+
+    @unittest.skipUnless(os.name=='posix','Unix browser channel requires Linux')
+    async def test_display_relays_binary_and_revocation_disconnects_it(self):
+        identity='e'*32
+        root=self.root/identity;root.mkdir()
+        received=asyncio.Event()
+        async def browser(reader,writer):
+            try:
+                writer.write(b'RFB 003.008\n');await writer.drain()
+                if await reader.read(3)==b'key':received.set()
+                await reader.read()
+            finally:writer.close();await writer.wait_closed()
+        server=await asyncio.start_unix_server(browser,path=str(root/'vnc.sock'))
+        self.gateway.sessions[identity]=Session(identity,'mikrotik','admin','owner-binding',time.time(),9999999999,time.time(),'private-cookie',None)
+        sweeper=None
+        try:
+            websocket=await self.client.ws_connect('/access-api/sessions/'+identity+'/display',headers=self.headers,protocols=('binary',))
+            self.assertEqual((await websocket.receive()).data,b'RFB 003.008\n')
+            await websocket.send_bytes(b'key');await asyncio.wait_for(received.wait(),2)
+            self.gateway.auth=AsyncMock(side_effect=web.HTTPUnauthorized())
+            sweeper=asyncio.create_task(self.gateway.sweep())
+            message=await asyncio.wait_for(websocket.receive(),13)
+            self.assertEqual(message.type,web.WSMsgType.CLOSE)
+            await websocket.close()
+            for _ in range(20):
+                if identity not in self.gateway.sessions:break
+                await asyncio.sleep(.05)
+            self.assertNotIn(identity,self.gateway.sessions)
+        finally:
+            if sweeper:sweeper.cancel();await asyncio.gather(sweeper,return_exceptions=True)
+            server.close();await server.wait_closed()
