@@ -60,11 +60,12 @@
   ],
   "syscalls": [
     {
-      "comment": "Chromium user-namespace sandbox, following Playwright Docker guidance",
+      "comment": "Chromium user-namespace sandbox; chroot is still guarded by kernel capabilities inside the new namespace",
       "names": [
         "clone",
         "setns",
-        "unshare"
+        "unshare",
+        "chroot"
       ],
       "action": "SCMP_ACT_ALLOW"
     },
