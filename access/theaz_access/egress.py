@@ -26,17 +26,20 @@ async def tunnel(left_reader, left_writer, right_reader, right_writer):
 
 
 def destination(method, raw_url, selected):
-    scheme, host, port = origin(selected)
+    selected = selected if isinstance(selected,dict) else {'url':selected}
+    scheme, host, port = origin(selected['url'],selected.get('connect_ip'))
+    address=selected.get('connect_ip') or host
     if method == 'CONNECT':
         # Chromium may tunnel a native ws:// connection as well as HTTPS.
-        # CONNECT still reaches exactly the selected web endpoint, never another port.
-        if raw_url != f'{host}:{port}':
-            raise ValueError('origin_denied')
-        return host, port, None
+        # Only the selected endpoint and explicitly reviewed HTTPS asset origins.
+        for endpoint in [selected,*selected.get('asset_origins',[])]:
+            _,name,endpoint_port=origin(endpoint['url'],endpoint.get('connect_ip'))
+            if raw_url==f'{name}:{endpoint_port}':return endpoint.get('connect_ip') or name,endpoint_port,None
+        raise ValueError('origin_denied')
     url = urlsplit(raw_url)
     if scheme != 'http' or url.scheme not in {'http','ws'} or url.hostname != host or (url.port or 80) != port or url.username or url.password or url.fragment:
         raise ValueError('origin_denied')
-    return host, port, (url.path or '/') + ('?' + url.query if url.query else '')
+    return address, port, (url.path or '/') + ('?' + url.query if url.query else '')
 
 
 async def handle(reader, writer, selected):
@@ -64,7 +67,9 @@ async def handle(reader, writer, selected):
                 if key.lower() in {'host', 'proxy-authorization', 'proxy-connection'}:
                     continue
                 forwarded.append(line)
-            authority = host + (':' + str(port) if port != 80 else '')
+            value=selected if isinstance(selected,dict) else {'url':selected}
+            _,hostname,_=origin(value['url'],value.get('connect_ip'))
+            authority = hostname + (':' + str(port) if port != 80 else '')
             upstream.write((f'{method} {path} {version}\r\nHost: {authority}\r\n' + '\r\n'.join(forwarded) + '\r\n\r\n').encode('latin-1'))
             await upstream.drain()
         await writer.drain()

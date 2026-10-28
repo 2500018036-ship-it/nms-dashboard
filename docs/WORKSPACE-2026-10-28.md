@@ -24,3 +24,14 @@ AssistantPage menyimpan percakapan dan polling pada komponen halaman. Backend me
 ## Pengujian
 
 Lihat hasil CI untuk regresi JS/Python, build, keamanan portal dan Chromium nyata. Pengujian UI memakai backend lokal terisolasi dengan akun dan respons AI sintetis; tidak memanggil AI berbayar atau mengubah infrastruktur produksi. Bukti GUI native terpisah memverifikasi render ketujuh halaman masuk. Login administratif asli dan seluruh operasi setelah login belum diverifikasi tanpa akun perangkat tersebut.
+
+
+## Perluasan katalog layanan
+
+Audit katalog produksi menemukan empat tujuan tambahan: phpMyAdmin pada 192.168.20.195:8088, halaman HTTP internal pada 192.168.20.195:80, portfolio azrilachdi.web.id, dan cloud.azrilachdi.web.id. Dua entri portfolio menunjuk origin yang sama sehingga berbagi satu target. Total 11 target unik.
+
+phpMyAdmin/HTTP memakai origin internal yang tepat. Dua virtual host HTTPS sudah tersedia melalui gateway publik; pemeriksaan melalui alamat internal 192.168.20.195:443 menghasilkan penolakan SNI, dan jalur 10.10.0.1:443 tidak merespons. Tanpa mengubah jaringan atau proxy layanan itu, sesi browser menggunakan hostname HTTPS asli dengan koneksi dipatok ke gateway 20.194.8.143:443 yang sudah ada. Sertifikat dan SNI tetap diverifikasi browser. Pemetaan hanya berasal dari konfigurasi root, tanpa DNS dinamis atau URL tujuan dari klien. Tidak ada port GUI baru dibuka.
+
+Regresi kebijakan memverifikasi origin/port persis dan menolak hostname lain, loopback, link-local/metadata, multicast, serta alamat tak ditentukan. Hak GUI tambahan dibatasi pada Administrator, Super Administrator, dan Server Administrator. Pembaruan package broker/config root tetap memerlukan aktivasi terkontrol sesuai deploy/access/ACTIVATION.md; image gateway/worker mengikuti CI.
+
+Visual portfolio awal tanpa CSS menunjukkan dependensi eksternal. Audit HTML sumber menetapkan tiga origin aset hanya untuk target portfolio: cdn.tailwindcss.com, fonts.googleapis.com, dan fonts.gstatic.com. Ketiganya dipatok ke alamat IPv4 publik hasil audit, memakai TLS asli, tanpa wildcard. Origin aset ini tidak diizinkan untuk GUI lain.

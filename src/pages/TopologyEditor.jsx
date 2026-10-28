@@ -33,6 +33,7 @@ export function TopologyEditor() {
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState(null)
   const [message, setMessage] = useState('')
+  const [importError, setImportError] = useState('')
   useEffect(() => {
     let active = true
     const refresh = async () => {
@@ -137,6 +138,7 @@ export function TopologyEditor() {
   const importFile = async (event) => {
     const file = event.target.files[0]; event.target.value = ''
     if (!file) return
+    setImportError(''); setMessage('')
     try {
       if (file.size > 2 * 1024 * 1024) throw new Error('Berkas melebihi 2 MB.')
       const value = importDrawio(await file.text())
@@ -146,7 +148,7 @@ export function TopologyEditor() {
         if (node.collector && !snapshot.checks.some((item) => item.id === node.collector)) node.collector = ''
       }
       if (workspace.create(value.name) === false) throw new Error('Maksimal 20 draf di browser. Hapus draf yang tidak diperlukan.'); workspace.change(value); setMessage('Diagram diimpor sebagai draf baru. Simpan untuk menyinkronkan ke server.')
-    } catch (e) { setError(null); setMessage(e.message) }
+    } catch (e) { setError(null); setImportError(e.message) }
   }
   const exportFile = () => {
     const url = URL.createObjectURL(new Blob([exportDrawio(graph)], { type: 'application/xml' }))
@@ -183,6 +185,7 @@ export function TopologyEditor() {
   return <>
     <AccessNote canManage={canManage} />
     <Feedback error={error || doc?.error || p.error || managementError} message={message} />
+    {importError && <div className="alert alert-danger" role="alert">{importError}</div>}
     {storageError && <div className="alert alert-warning">Penyimpanan draf di browser tidak tersedia. Simpan ke server sebelum meninggalkan halaman.</div>}
     {limitError && <div className="alert alert-warning">Maksimal 20 draf di browser. Hapus draf yang tidak diperlukan sebelum membuat topologi baru.</div>}
     <Loading loading={p.loading || managementLoading} />
@@ -218,7 +221,7 @@ export function TopologyEditor() {
             <input id="topology-symbol-search" className="form-control form-control-sm mb-2" placeholder="Cari ikon…" value={query} onChange={(event) => setQuery(event.target.value)}/>
             <div className="nms-topology-symbols">{networkIcons.filter((item) => (item.name + ' ' + item.kind).toLowerCase().includes(query.toLowerCase())).map((item) => <button key={item.id} draggable={canManage} disabled={!canManage || graph.nodes.length >= 100} className="btn btn-sm btn-light border text-start" onDragStart={(event) => event.dataTransfer.setData('application/theaz-device', item.id)} onClick={() => insertSymbol(item.id)}><img src={iconURL(item.id)} alt="" width="28" height="28"/><span>{item.name}</span></button>)}</div>
           </aside>
-          <Suspense fallback={<p>Memuat canvas…</p>}><TopologyCanvas key={selected} graph={graph} view={view} canManage={canManage} onChange={change} onView={setView} onSelect={setNodeId} onDrop={insertSymbol} status={status} edgeStatus={(edge) => portObservation(edge, graph.nodes, snapshot.core.interfaces, p.capabilities.inventory_targets).status} tooltip={(node) => node.name + ' · ' + status(node) + '\n' + (node.group ? 'Grup: ' + node.group + '\n' : '') + nodeServices(node).map((item) => item.kind + ': ' + item.name + ' · ' + item.status).join('\n')} edgeTooltip={(edge) => (edge.label || edge.type || '') + ' · ' + portObservation(edge, graph.nodes, snapshot.core.interfaces, p.capabilities.inventory_targets).scope} onEdit={(kind, value) => { const item = (kind === 'node' ? graph.nodes : graph.links).find((entry) => entry.id === value); if (item) setModal({ kind, [kind]: item }) }}/></Suspense>
+          <Suspense fallback={<p>Memuat canvas…</p>}><TopologyCanvas key={selected} graph={graph} view={view} canManage={canManage} onChange={change} onUndo={workspace.undo} onRedo={workspace.redo} onView={setView} onSelect={setNodeId} onDrop={insertSymbol} status={status} edgeStatus={(edge) => portObservation(edge, graph.nodes, snapshot.core.interfaces, p.capabilities.inventory_targets).status} tooltip={(node) => node.name + ' · ' + status(node) + '\n' + (node.group ? 'Grup: ' + node.group + '\n' : '') + nodeServices(node).map((item) => item.kind + ': ' + item.name + ' · ' + item.status).join('\n')} edgeTooltip={(edge) => (edge.label || edge.type || '') + ' · ' + portObservation(edge, graph.nodes, snapshot.core.interfaces, p.capabilities.inventory_targets).scope} onEdit={(kind, value) => { const item = (kind === 'node' ? graph.nodes : graph.links).find((entry) => entry.id === value); if (item) setModal({ kind, [kind]: item }) }}/></Suspense>
         </div>
         <p className="small text-muted mt-2 mb-0">Seret ikon ke canvas atau klik untuk menambah. Seret pegangan koneksi antarnode; klik ganda untuk detail. Seret area kosong untuk pan, Ctrl + roda mouse untuk zoom. Maksimal 100 node dan 200 koneksi. Ikon manual tidak memicu konfigurasi atau pemeriksaan jaringan.</p>
         {selectedNode && <div className="border rounded p-3 mt-3"><div className="d-flex flex-wrap gap-2 align-items-center"><strong>{selectedNode.name}</strong><Badge status={status(selectedNode)}>{status(selectedNode)}</Badge><button className="btn btn-sm btn-outline-primary ms-auto" onClick={() => setModal({ kind: 'node', node: selectedNode })}>Detail node</button>{canManage && <button className="btn btn-sm btn-outline-danger" onClick={() => setModal({ kind: 'delete-node' })}>Hapus node</button>}</div><p className="small text-muted mb-0 mt-2">{nodeServices(selectedNode).map((item) => item.kind + ': ' + item.name + ' · ' + item.status).join(' / ') || 'Belum ada layanan terpantau yang terkait.'}</p></div>}

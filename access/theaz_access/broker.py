@@ -75,7 +75,7 @@ class Broker:
             now = time.time()
             self.workers[identity] = {'id': identity, 'target': target_id, 'created': now,
                 'expires': now + self.config['lifetime_seconds'], 'lease': now}
-            return {**self.workers[identity], 'url': selected['url']}
+            return {**self.workers[identity], 'url': selected['url'], **({'connect_ip':selected['connect_ip']} if selected.get('connect_ip') else {}), **({'asset_origins':selected['asset_origins']} if selected.get('asset_origins') else {})}
 
     def erase(self, identity):
         check_sid(identity)

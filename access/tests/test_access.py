@@ -27,9 +27,20 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(ValueError):egress.destination('CONNECT','192.168.10.26:22',selected)
         with self.assertRaises(ValueError):egress.destination('CONNECT','192.168.20.200:22','https://192.168.20.200:8006/')
 
+    def test_virtual_host_mapping_keeps_exact_origin_and_blocks_metadata_or_dns_changes(self):
+        selected={'url':'https://cloud.azrilachdi.web.id/','connect_ip':'20.194.8.143'}
+        self.assertEqual(egress.destination('CONNECT','cloud.azrilachdi.web.id:443',selected),('20.194.8.143',443,None))
+        for authority in ('evil.test:443','20.194.8.143:443','cloud.azrilachdi.web.id:22'):
+            with self.assertRaises(ValueError):egress.destination('CONNECT',authority,selected)
+        for ip in ('127.0.0.1','169.254.169.254','0.0.0.0','224.0.0.1'):
+            with self.assertRaises(ValueError):origin(selected['url'],ip)
+        for hostname in ('localhost','127.0.0.1','evil..test','-evil.test','evil.test.'):
+            with self.assertRaises(ValueError):origin('https://'+hostname+'/',selected['connect_ip'])
+        self.assertEqual(egress.destination('GET','http://site.example/path',{'url':'http://site.example/','connect_ip':'192.168.20.195'}),('192.168.20.195',80,'/path'))
+
     def test_config_is_audited_roles_are_restricted_and_ids_are_not_paths(self):
         config=load(CONFIG)
-        self.assertEqual(len(config['targets']),7)
+        self.assertEqual(len(config['targets']),11)
         self.assertEqual(config['max_sessions'],1)
         self.assertNotIn('Viewer',target(config,'portainer')['roles'])
         for value in ('../docker.sock','a'*31,'a'*33,'../../'):
@@ -37,6 +48,15 @@ class PolicyTests(unittest.TestCase):
         with self.assertRaises(KeyError):target(config,'missing')
         for value in ('http://169.254.169.254/','http://127.0.0.1/','http://user:pass@192.168.20.1/'):
             with self.assertRaises(ValueError):origin(value)
+
+    def test_asset_origins_are_target_specific_and_ports_and_hosts_remain_exact(self):
+        config=load(CONFIG)
+        portfolio=target(config,'portfolio')
+        self.assertEqual(egress.destination('CONNECT','cdn.tailwindcss.com:443',portfolio),('104.26.2.143',443,None))
+        for selected in (target(config,'cloud'),target(config,'phpmyadmin'),target(config,'mikrotik')):
+            with self.assertRaises(ValueError):egress.destination('CONNECT','cdn.tailwindcss.com:443',selected)
+        for authority in ('cdn.tailwindcss.com:80','evil.tailwindcss.com:443','fonts.googleapis.com.evil.test:443','169.254.169.254:443'):
+            with self.assertRaises(ValueError):egress.destination('CONNECT',authority,portfolio)
 
 
 class GatewayTests(unittest.IsolatedAsyncioTestCase):

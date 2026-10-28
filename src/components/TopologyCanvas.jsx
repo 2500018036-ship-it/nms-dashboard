@@ -17,7 +17,9 @@ export default function TopologyCanvas(props) {
     const nodes = new Map(); const edges = new Map()
     let updating = false; let fingerprint = ''; let viewKey = ''
     graph.setConnectable(true); graph.setPanning(true); graph.setHtmlLabels(false)
-    graph.setAllowDanglingEdges(false); graph.setAllowLoops(false); graph.setCellsEditable(false)
+    graph.setAllowDanglingEdges(false); graph.setAllowLoops(false); graph.setCellsEditable(false); graph.setCellsCloneable(false); graph.setTooltips(true)
+    const validateEdge = graph.getEdgeValidationError.bind(graph)
+    graph.getEdgeValidationError = (edge, source, target) => graph.getChildEdges(parent).length >= 200 && !graph.getChildEdges(parent).includes(edge) ? 'Maksimal 200 koneksi.' : validateEdge(edge, source, target)
     graph.getPlugin('PanningHandler').useLeftButtonForPanning = true
     graph.getPlugin('PanningHandler').ignoreCell = false
     const edgeStyle = graph.getStylesheet().getDefaultEdgeStyle()
@@ -27,9 +29,11 @@ export default function TopologyCanvas(props) {
       if (updating) return
       const previous = latest.current.graph
       const vertices = graph.getChildVertices(parent)
+      let constrained = false
       const nextNodes = vertices.map((cell) => {
         const geometry = cell.getGeometry(); const saved = nodes.get(cell.id) || {}
         const node = { ...saved, id: cell.id, name: String(cell.value || saved.name || 'Perangkat').slice(0, 80), kind: saved.kind || 'generic', x: clamp(geometry.x + geometry.width / 2), y: clamp(geometry.y + geometry.height / 2), width: clamp(geometry.width, 40, 400), height: clamp(geometry.height, 40, 400) }
+        if (geometry.width !== node.width || geometry.height !== node.height || geometry.x !== node.x - node.width / 2 || geometry.y !== node.y - node.height / 2) constrained = true
         nodes.set(cell.id, node); return node
       })
       const ids = new Set(nextNodes.map((node) => node.id))
@@ -40,7 +44,7 @@ export default function TopologyCanvas(props) {
       })
       const next = { ...previous, nodes: nextNodes, links: nextEdges }
       if (next.nodes.length > 100 || next.links.length > 200) { undo.undo(); return }
-      fingerprint = JSON.stringify(next)
+      fingerprint = constrained ? '' : JSON.stringify(next)
       latest.current.onChange(next)
     }
     model.addListener(InternalEvent.UNDO, (_sender, event) => { if (!updating) undo.undoableEditHappened(event.getProperty('edit')) })
@@ -64,8 +68,8 @@ export default function TopologyCanvas(props) {
     }
     const keydown = (event) => {
       if (!latest.current.canManage || event.target.closest('input,textarea,select')) return
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); if (event.shiftKey) undo.redo(); else undo.undo() }
-      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); undo.redo() }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'z') { event.preventDefault(); if (event.shiftKey) latest.current.onRedo(); else latest.current.onUndo() }
+      if ((event.ctrlKey || event.metaKey) && event.key.toLowerCase() === 'y') { event.preventDefault(); latest.current.onRedo() }
       if (event.key === 'Delete' || event.key === 'Backspace') { event.preventDefault(); graph.removeCells() }
     }
     const drop = (event) => {
@@ -131,8 +135,8 @@ export default function TopologyCanvas(props) {
   }, [])
   useEffect(() => { engine.current?.sync(props) })
   return <div className="nms-topology-canvas-wrap"><div className="d-flex gap-2 p-2 border-bottom">
-    <button className="btn btn-sm btn-outline-secondary" disabled={!props.canManage} onClick={() => engine.current?.undo()}>Urungkan</button>
-    <button className="btn btn-sm btn-outline-secondary" disabled={!props.canManage} onClick={() => engine.current?.redo()}>Ulangi</button>
+    <button className="btn btn-sm btn-outline-secondary" disabled={!props.canManage} onClick={props.onUndo}>Urungkan</button>
+    <button className="btn btn-sm btn-outline-secondary" disabled={!props.canManage} onClick={props.onRedo}>Ulangi</button>
     <button className="btn btn-sm btn-outline-danger" disabled={!props.canManage} onClick={() => engine.current?.delete()}>Hapus pilihan</button>
     <small className="text-muted ms-auto align-self-center">maxGraph · Ctrl+Z / Ctrl+Y</small>
   </div><div ref={container} className="nms-topology-canvas" tabIndex={0} role="application" aria-label="Canvas topologi interaktif"/></div>

@@ -22,6 +22,6 @@ test('draw.io importer rejects external entities and bounds decompression; exter
 })
 
 test('known native services navigate through NMS and arbitrary destinations are not promoted', () => {
-  for (const [url, target] of [['http://192.168.20.1/', 'mikrotik'], ['http://192.168.10.26/', 'cisco'], ['http://192.168.10.194/', 'tplink'], ['https://192.168.20.200:8006/', 'proxmox'], ['http://192.168.20.199:5380/', 'technitium'], ['https://192.168.20.195:9443/', 'portainer'], ['http://192.168.20.195:81/', 'npm']]) assert.equal(portalTarget({ url }), target)
+  for (const [url, target] of [['http://192.168.20.1/', 'mikrotik'], ['http://192.168.10.26/', 'cisco'], ['http://192.168.10.194/', 'tplink'], ['https://192.168.20.200:8006/', 'proxmox'], ['http://192.168.20.199:5380/', 'technitium'], ['https://192.168.20.195:9443/', 'portainer'], ['http://192.168.20.195:81/', 'npm'], ['http://192.168.20.195:8088/', 'phpmyadmin'], ['http://192.168.20.195/', 'web-http'], ['https://azrilachdi.web.id/', 'portfolio'], ['https://cloud.azrilachdi.web.id/', 'cloud']]) assert.equal(portalTarget({ url }), target)
   assert.equal(portalTarget({ url: 'https://example.org/' }), null)
 })

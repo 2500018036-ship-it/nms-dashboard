@@ -331,7 +331,7 @@ export function AppLayout() {
 
     </div></main>
 
-    <footer className="admin-footer"><div className="container-fluid px-4"><div className="d-flex flex-wrap justify-content-between gap-2 small text-muted"><span className="d-flex align-items-center gap-2"><BrandLogo className="theaz-brand-footer" />{platform.settings?.value.identity || workspaceTitle} · v0.6.0</span><span>UI Metis · <Link to="/system-health">Status sistem</Link> · Asia/Jakarta</span></div></div></footer>
+    <footer className="admin-footer"><div className="container-fluid px-4"><div className="d-flex flex-wrap justify-content-between gap-2 small text-muted"><span className="d-flex align-items-center gap-2"><BrandLogo className="theaz-brand-footer" />{platform.settings?.value.identity && platform.settings.value.identity !== 'NMS Homelab' ? platform.settings.value.identity : workspaceTitle} · v0.6.0</span><span>UI Metis · <Link to="/system-health">Status sistem</Link> · Asia/Jakarta</span></div></div></footer>
 
   </div></div>
 

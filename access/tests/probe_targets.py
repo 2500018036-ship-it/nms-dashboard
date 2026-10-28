@@ -17,7 +17,10 @@ async def main():
     output=Path(os.environ['ACCESS_TEST_OUTPUT']).resolve();output.mkdir(mode=0o700,parents=True,exist_ok=True)
     broker=Broker(config,'/unused',image,'/unused',os.environ['ACCESS_INVENTORY_DB'])
     results=[]
+    requested=set(filter(None,os.environ.get('ACCESS_TEST_TARGETS','').split(',')))
+    if requested-{target['id'] for target in config['targets']}:raise ValueError('invalid_test_target')
     for target in config['targets']:
+        if requested and target['id'] not in requested:continue
         try:selected=broker.selected(target['id'])
         except (ValueError, OSError) as error:
             value={'target':target['id'],'exit':1,'browser_error':True,'error':type(error).__name__,'authenticated_login':'NOT_TESTED'}
@@ -25,7 +28,7 @@ async def main():
         with tempfile.TemporaryDirectory(prefix='theaz-native-page-') as directory:
             root=Path(directory);os.chown(root,31000,31000);root.chmod(0o700)
             (root/'start.json').write_text(json.dumps(selected))
-            proxy=await serve(root/'egress.sock',selected['url']);os.chown(root/'egress.sock',31000,31000);os.chmod(root/'egress.sock',0o600)
+            proxy=await serve(root/'egress.sock',selected);os.chown(root/'egress.sock',31000,31000);os.chmod(root/'egress.sock',0o600)
             name='theaz-native-probe-'+target['id']
             command=['docker','run','--rm','--name',name,'--network','none','--user','31000:31000','--read-only','--init',
                 '--cap-drop','ALL','--security-opt','no-new-privileges:true','--security-opt','seccomp='+str(Path('access/worker/seccomp.json').resolve()),

@@ -10,6 +10,10 @@ export function portalTarget(service) {
     if (host === '192.168.20.199' && port === '5380') return 'technitium'
     if (host === '192.168.20.195' && port === '9443') return 'portainer'
     if (host === '192.168.20.195' && port === '81') return 'npm'
+    if (host === '192.168.20.195' && port === '8088') return 'phpmyadmin'
+    if (host === '192.168.20.195' && port === '80') return 'web-http'
+    if (host === 'azrilachdi.web.id' && port === '443') return 'portfolio'
+    if (host === 'cloud.azrilachdi.web.id' && port === '443') return 'cloud'
   } catch { /* Unknown targets are never forwarded from a client URL. */ }
   return null
 }

@@ -40,3 +40,13 @@ test('topology single-flight save retains edits made during a request and reuses
   uncertain = true; await a.save(); const key = bodies[1].request_id; stop(); uncertain = false
   const b = createTopologyWorkspace({ client, username: 'one', storage: store }); const end = b.start(); await tick(); doc = b.getSnapshot().documents[b.getSnapshot().selected]; assert.equal(bodies[2].request_id, key); assert.equal(doc.dirty, false); assert.equal(doc.pending, null); end()
 })
+
+test('topology undo and redo restore palette additions, metadata and deleted connections', () => {
+  const a = createTopologyWorkspace({ client: {}, username: 'one', storage: storage(), makeId: () => 'd'.repeat(32) }); a.create('LAN')
+  const router = { id: 'r', name: 'Router', kind: 'router', icon: 'mikrotik', x: 200, y: 100 }
+  a.change({ name: 'LAN', nodes: [router], links: [] })
+  a.undo(); let doc = a.getSnapshot().documents[a.getSnapshot().selected]; assert.equal(doc.graph.nodes.length, 0)
+  a.redo(); doc = a.getSnapshot().documents[a.getSnapshot().selected]; assert.equal(doc.graph.nodes[0].icon, 'mikrotik')
+  a.change({ name: 'LAN', nodes: [router, { ...router, id: 's', name: 'Switch' }], links: [{ id: 'e', source: 'r', target: 's', label: 'Trunk' }] })
+  a.change({ name: 'LAN', nodes: [router], links: [] }); a.undo(); doc = a.getSnapshot().documents[a.getSnapshot().selected]; assert.equal(doc.graph.links[0].label, 'Trunk'); assert.equal(doc.dirty, true)
+})
