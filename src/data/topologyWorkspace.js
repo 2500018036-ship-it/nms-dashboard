@@ -5,7 +5,7 @@ export function createTopologyWorkspace({ client, username, storage = globalThis
   try { const raw = storage.getItem(key) || '{}'; if (raw.length <= 3 * 1024 * 1024) restored = JSON.parse(raw) } catch { /* Server records remain available. */ }
   const documents = Object.fromEntries(Object.entries(restored.documents || {}).filter(([, doc]) => doc?.graph && typeof doc.graph.name === 'string' && Array.isArray(doc.graph.nodes) && doc.graph.nodes.length <= 100 && Array.isArray(doc.graph.links) && doc.graph.links.length <= 200).slice(-20))
   let state = { selected: typeof restored.selected === 'string' ? restored.selected : '', documents, records: [], storageError: false, limitError: false }
-  const listeners = new Set(); const flights = new Map()
+  const listeners = new Set(); const flights = new Map(); const histories = new Map()
   let active = false
   const update = (patch) => {
     state = { ...state, ...patch }
@@ -64,7 +64,20 @@ export function createTopologyWorkspace({ client, username, storage = globalThis
     },
     change(graph) {
       const doc = state.documents[state.selected]
-      if (doc) patchDocument(state.selected, { graph, dirty: true, version: doc.version + 1, error: null })
+      if (doc && JSON.stringify(doc.graph) !== JSON.stringify(graph)) {
+        const history = histories.get(state.selected) || { undo: [], redo: [] }
+        history.undo = [...history.undo, structuredClone(doc.graph)].slice(-20); history.redo = []
+        histories.set(state.selected, history)
+        patchDocument(state.selected, { graph, dirty: true, version: doc.version + 1, error: null })
+      }
+    },
+    undo() {
+      const doc = state.documents[state.selected]; const history = histories.get(state.selected)
+      if (doc && history?.undo.length) { history.redo.push(structuredClone(doc.graph)); patchDocument(state.selected, { graph: history.undo.pop(), dirty: true, version: doc.version + 1, error: null }) }
+    },
+    redo() {
+      const doc = state.documents[state.selected]; const history = histories.get(state.selected)
+      if (doc && history?.redo.length) { history.undo.push(structuredClone(doc.graph)); patchDocument(state.selected, { graph: history.redo.pop(), dirty: true, version: doc.version + 1, error: null }) }
     },
     setView(value) {
       const doc = state.documents[state.selected]
@@ -77,8 +90,9 @@ export function createTopologyWorkspace({ client, username, storage = globalThis
       if (record) patchDocument(state.selected, documentFrom(record))
     },
     forget() {
+      histories.delete(state.selected)
       const docs = { ...state.documents }; delete docs[state.selected]
-      update({ selected: '', documents: docs })
+      update({ selected: '', documents: docs, limitError: false })
     },
     save,
     start() {
