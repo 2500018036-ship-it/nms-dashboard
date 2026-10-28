@@ -17,7 +17,10 @@ async def main():
     output=Path(os.environ['ACCESS_TEST_OUTPUT']).resolve();output.mkdir(mode=0o700,parents=True,exist_ok=True)
     broker=Broker(config,'/unused',image,'/unused',os.environ['ACCESS_INVENTORY_DB'])
     results=[]
+    requested=set(filter(None,os.environ.get('ACCESS_TEST_TARGETS','').split(',')))
+    if requested-{target['id'] for target in config['targets']}:raise ValueError('invalid_test_target')
     for target in config['targets']:
+        if requested and target['id'] not in requested:continue
         try:selected=broker.selected(target['id'])
         except (ValueError, OSError) as error:
             value={'target':target['id'],'exit':1,'browser_error':True,'error':type(error).__name__,'authenticated_login':'NOT_TESTED'}
