@@ -8,10 +8,24 @@ SID = re.compile(r'^[a-f0-9]{32}$')
 TARGET = re.compile(r'^[a-z][a-z0-9_-]{0,39}$')
 
 
-def origin(value):
+def origin(value, connect_ip=None):
     url = urlsplit(value)
     if url.scheme not in {'http', 'https'} or url.username or url.password or not url.hostname or url.fragment:
         raise ValueError('invalid_target_origin')
+    if connect_ip is not None:
+        # Root-owned virtual-host mapping: preserve browser Host/SNI and TLS checks,
+        # while dialing a fixed audited address without resolving caller-controlled DNS.
+        ip = ipaddress.IPv4Address(connect_ip)
+        private = any(ip in ipaddress.ip_network(net) for net in ('10.0.0.0/8','172.16.0.0/12','192.168.0.0/16'))
+        if not (ip.is_global or private) or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
+            raise ValueError('invalid_connect_address')
+        hostname=url.hostname
+        if len(hostname)>253 or '.' not in hostname or not re.fullmatch(r'[a-z0-9](?:[a-z0-9.-]*[a-z0-9])?',hostname) or any(not label or len(label)>63 or label.startswith('-') or label.endswith('-') for label in hostname.split('.')):
+            raise ValueError('invalid_target_hostname')
+        try:ipaddress.IPv4Address(hostname)
+        except ValueError:pass
+        else:raise ValueError('invalid_target_hostname')
+        return url.scheme,hostname,url.port or (443 if url.scheme=='https' else 80)
     ip = ipaddress.IPv4Address(url.hostname)
     if not ip.is_private or ip.is_loopback or ip.is_link_local or ip.is_multicast or ip.is_unspecified:
         raise ValueError('invalid_target_origin')
@@ -35,7 +49,8 @@ def load(path):
         if not TARGET.fullmatch(target['id']) or target['id'] in ids:
             raise ValueError('invalid_target_id')
         ids.add(target['id'])
-        origin(target['url'])
+        origin(target['url'],target.get('connect_ip'))
+        if target.get('connect_ip') and target.get('inventory_mac'):raise ValueError('invalid_target_mapping')
         if not target['roles'] or any(role not in {'Administrator', 'Super Administrator', 'Network Administrator', 'Server Administrator'} for role in target['roles']):
             raise ValueError('invalid_roles')
         for pin in target.get('tls_spki', []):

@@ -195,7 +195,7 @@ def app(gateway):
             worker = await gateway.control('POST', '/workers', {'id': identity, 'target': body['target']})
             try:
                 path = gateway.directory(identity) / 'egress.sock'
-                proxy = await egress.serve(path, worker['url'])
+                proxy = await egress.serve(path, worker)
                 os.chmod(path, 0o600)
             except BaseException:
                 await gateway.control('DELETE', '/workers/' + identity)

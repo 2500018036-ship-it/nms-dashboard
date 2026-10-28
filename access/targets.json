@@ -4,12 +4,134 @@
   "idle_seconds": 600,
   "lifetime_seconds": 1800,
   "targets": [
-    {"id":"mikrotik","name":"MikroTik WebFig","url":"http://192.168.20.1/","roles":["Administrator","Super Administrator","Network Administrator"],"tls_spki":[]},
-    {"id":"cisco","name":"Cisco SF200","url":"http://192.168.10.26/","roles":["Administrator","Super Administrator","Network Administrator"],"tls_spki":[]},
-    {"id":"tplink","name":"TP-Link TLWR","url":"http://192.168.10.194/","inventory_mac":"20:E1:5D:91:53:DC","roles":["Administrator","Super Administrator","Network Administrator"],"tls_spki":[]},
-    {"id":"proxmox","name":"Proxmox VE","url":"https://192.168.20.200:8006/","roles":["Administrator","Super Administrator","Server Administrator"],"tls_spki":["y5vcqtTW+NrT7gxLlXRRB5pl6baJK/uyl5Z7PASigPQ="]},
-    {"id":"technitium","name":"Technitium DNS","url":"http://192.168.20.199:5380/","roles":["Administrator","Super Administrator","Network Administrator","Server Administrator"],"tls_spki":[]},
-    {"id":"portainer","name":"Portainer","url":"https://192.168.20.195:9443/","roles":["Administrator","Super Administrator","Server Administrator"],"tls_spki":["bj8NT5a46mDICAWBZ9Jyimm/kOgm5GSHHCta7lt8I4s="]},
-    {"id":"npm","name":"Nginx Proxy Manager","url":"http://192.168.20.195:81/","roles":["Administrator","Super Administrator","Server Administrator"],"tls_spki":[]}
+    {
+      "id": "mikrotik",
+      "name": "MikroTik WebFig",
+      "url": "http://192.168.20.1/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Network Administrator"
+      ],
+      "tls_spki": []
+    },
+    {
+      "id": "cisco",
+      "name": "Cisco SF200",
+      "url": "http://192.168.10.26/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Network Administrator"
+      ],
+      "tls_spki": []
+    },
+    {
+      "id": "tplink",
+      "name": "TP-Link TLWR",
+      "url": "http://192.168.10.194/",
+      "inventory_mac": "20:E1:5D:91:53:DC",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Network Administrator"
+      ],
+      "tls_spki": []
+    },
+    {
+      "id": "proxmox",
+      "name": "Proxmox VE",
+      "url": "https://192.168.20.200:8006/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Server Administrator"
+      ],
+      "tls_spki": [
+        "y5vcqtTW+NrT7gxLlXRRB5pl6baJK/uyl5Z7PASigPQ="
+      ]
+    },
+    {
+      "id": "technitium",
+      "name": "Technitium DNS",
+      "url": "http://192.168.20.199:5380/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Network Administrator",
+        "Server Administrator"
+      ],
+      "tls_spki": []
+    },
+    {
+      "id": "portainer",
+      "name": "Portainer",
+      "url": "https://192.168.20.195:9443/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Server Administrator"
+      ],
+      "tls_spki": [
+        "bj8NT5a46mDICAWBZ9Jyimm/kOgm5GSHHCta7lt8I4s="
+      ]
+    },
+    {
+      "id": "npm",
+      "name": "Nginx Proxy Manager",
+      "url": "http://192.168.20.195:81/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Server Administrator"
+      ],
+      "tls_spki": []
+    },
+    {
+      "id": "phpmyadmin",
+      "name": "phpMyAdmin",
+      "url": "http://192.168.20.195:8088/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Server Administrator"
+      ],
+      "tls_spki": []
+    },
+    {
+      "id": "web-http",
+      "name": "Web HTTP internal",
+      "url": "http://192.168.20.195/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Server Administrator"
+      ],
+      "tls_spki": []
+    },
+    {
+      "id": "portfolio",
+      "name": "Situs Portfolio THEAZ",
+      "url": "https://azrilachdi.web.id/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Server Administrator"
+      ],
+      "tls_spki": [],
+      "connect_ip": "20.194.8.143"
+    },
+    {
+      "id": "cloud",
+      "name": "Cloud Storage",
+      "url": "https://cloud.azrilachdi.web.id/",
+      "roles": [
+        "Administrator",
+        "Super Administrator",
+        "Server Administrator"
+      ],
+      "tls_spki": [],
+      "connect_ip": "20.194.8.143"
+    }
   ]
 }
