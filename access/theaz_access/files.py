@@ -1,5 +1,6 @@
 """Owner-authenticated, bounded transfer area; never expose browser profiles."""
 import os
+from contextlib import contextmanager
 from pathlib import Path
 import re
 import secrets
@@ -18,6 +19,16 @@ def folder(gateway, item, kind):
     return path
 
 
+@contextmanager
+def directory(gateway, item, kind):
+    # Linux runtime: pin the directory inode across asynchronous file transfers.
+    descriptor = os.open(folder(gateway, item, kind), os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW)
+    try:
+        yield descriptor
+    finally:
+        os.close(descriptor)
+
+
 def routes(application, gateway):
     async def upload(request):
         item, _ = await gateway.owned(request)
@@ -28,30 +39,36 @@ def routes(application, gateway):
         name = re.sub(r'[^A-Za-z0-9._-]', '_', Path(part.filename).name)[:100].lstrip('.')
         if not name:
             raise web.HTTPBadRequest(text='invalid_file')
-        path = folder(gateway, item, 'uploads') / (secrets.token_hex(4) + '-' + name)
+        name = secrets.token_hex(4) + '-' + name
         size = 0
-        try:
-            with path.open('xb') as stream:
-                path.chmod(0o600)
-                while chunk := await part.read_chunk(65536):
-                    size += len(chunk)
-                    if size > MAX_FILE:
-                        raise web.HTTPRequestEntityTooLarge(max_size=MAX_FILE, actual_size=size)
-                    stream.write(chunk)
-            if await reader.next() is not None:
-                raise web.HTTPBadRequest(text='one_file_required')
-        except BaseException:
-            path.unlink(missing_ok=True)
-            raise
+        with directory(gateway, item, 'uploads') as descriptor:
+            try:
+                file = os.open(name, os.O_WRONLY | os.O_CREAT | os.O_EXCL | os.O_NOFOLLOW, 0o600, dir_fd=descriptor)
+                with os.fdopen(file, 'wb') as stream:
+                    while chunk := await part.read_chunk(65536):
+                        size += len(chunk)
+                        if size > MAX_FILE:
+                            raise web.HTTPRequestEntityTooLarge(max_size=MAX_FILE, actual_size=size)
+                        stream.write(chunk)
+                if await reader.next() is not None:
+                    raise web.HTTPBadRequest(text='one_file_required')
+            except BaseException:
+                try:os.unlink(name, dir_fd=descriptor)
+                except FileNotFoundError:pass
+                raise
         gateway.record(item.actor, item.target, item.id, 'access.file_uploaded', 'bytes:' + str(size))
-        return web.json_response({'ok': True, 'remote_path': '/run/session/uploads/' + path.name})
+        return web.json_response({'ok': True, 'remote_path': '/run/session/uploads/' + name})
 
     async def listing(request):
         item, _ = await gateway.owned(request)
-        directory = folder(gateway, item, 'downloads')
-        values = [{'name': p.name, 'bytes': p.stat().st_size} for p in directory.iterdir()
-            if p.is_file() and not p.is_symlink() and re.fullmatch(r'[A-Za-z0-9._ -]{1,150}', p.name)
-            and not p.name.endswith('.crdownload') and p.stat().st_size <= MAX_FILE][:100]
+        values = []
+        with directory(gateway, item, 'downloads') as descriptor:
+            for name in os.listdir(descriptor):
+                if len(values) >= 100:break
+                if not re.fullmatch(r'[A-Za-z0-9._ -]{1,150}', name) or name.endswith('.crdownload'):continue
+                try:info = os.stat(name, dir_fd=descriptor, follow_symlinks=False)
+                except FileNotFoundError:continue
+                if stat.S_ISREG(info.st_mode) and info.st_size <= MAX_FILE:values.append({'name':name, 'bytes':info.st_size})
         return web.json_response({'items': values})
 
     async def download(request):
@@ -59,9 +76,9 @@ def routes(application, gateway):
         name = request.match_info['name']
         if not re.fullmatch(r'[A-Za-z0-9._ -]{1,150}', name) or name in {'.', '..'}:
             raise web.HTTPBadRequest(text='invalid_file')
-        path = folder(gateway, item, 'downloads') / name
         try:
-            descriptor = os.open(path, os.O_RDONLY | getattr(os, 'O_NOFOLLOW', 0))
+            with directory(gateway, item, 'downloads') as parent:
+                descriptor = os.open(name, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK, dir_fd=parent)
         except OSError:
             raise web.HTTPNotFound()
         with os.fdopen(descriptor, 'rb') as stream:

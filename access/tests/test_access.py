@@ -92,6 +92,7 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         self.assertNotIn(identity,self.gateway.sessions)
         self.gateway.control.assert_awaited_once()
 
+    @unittest.skipUnless(os.name=='posix','File bridge uses Linux directory descriptors')
     async def test_files_are_owner_only_and_profiles_cannot_be_downloaded(self):
         identity='d'*32
         self.gateway.sessions[identity]=Session(identity,'mikrotik','admin','owner-binding',time.time(),9999999999,time.time(),'private-cookie',None)
@@ -103,6 +104,12 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         downloads=root/'downloads';downloads.mkdir();(downloads/'backup.cfg').write_bytes(b'fixture-download')
         response=await self.client.get('/access-api/sessions/'+identity+'/downloads/backup.cfg',headers=self.headers)
         self.assertEqual(await response.read(),b'fixture-download')
+        (downloads/'profile-link').symlink_to(root/'start.json')
+        response=await self.client.get('/access-api/sessions/'+identity+'/downloads/profile-link',headers=self.headers)
+        self.assertEqual(response.status,404)
+        os.mkfifo(downloads/'pipe')
+        response=await asyncio.wait_for(self.client.get('/access-api/sessions/'+identity+'/downloads/pipe',headers=self.headers),2)
+        self.assertEqual(response.status,403)
         response=await self.client.get('/access-api/sessions/'+identity+'/downloads/%2e%2e%2fprofile',headers=self.headers)
         self.assertNotEqual(response.status,200)
         self.gateway.auth=AsyncMock(return_value={**self.owner,'binding':'other-login'})
