@@ -42,3 +42,5 @@ Visual portfolio awal tanpa CSS menunjukkan dependensi eksternal. Audit HTML sum
 Penghapusan kontainer sesi kadang selesai di Docker setelah CLI melewati timeout. Broker sebelumnya mempertahankan slot meskipun kontainer telah hilang. Stop kini mengonfirmasi keberadaan kontainer dengan nama dan label persis, melepas slot hanya ketika penghapusan terkonfirmasi, dan aman dipanggil bersamaan oleh penutupan sesi dan lease cleanup. Kegagalan daemon yang belum dapat dipastikan tetap mempertahankan slot.
 
 Worker kini menerbitkan status ready setelah benar-benar menerima greeting RFB dari server tampilan. CI menunda x11vnc secara sengaja untuk memverifikasi status ready tidak muncul hanya karena pathname socket sudah ada. Tidak ada perubahan jaringan atau konfigurasi perangkat.
+
+Unit broker mempertahankan direktori socket saat restart otomatis. Selector image dibaca melalui direktori read-only, sehingga pembaruan selector secara atomic rename terlihat tanpa mempertahankan inode file lama. Direktori tetap tidak dapat ditulis oleh broker.
