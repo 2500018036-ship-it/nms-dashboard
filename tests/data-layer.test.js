@@ -106,7 +106,7 @@ test('development gateway disallows administrative methods and endpoints', () =>
   assert.equal(isReadOnlyRequest('POST', '/nms-api/api/status', '/nms-api'), false)
   assert.equal(isReadOnlyRequest('GET', '/nms-api/api/exec', '/nms-api'), false)
 })
-test('all 15 modules have unique routes and can be found by title', () => {
-  assert.equal(modules.length, 15); assert.equal(new Set(modules.map((m) => m.path)).size, 15)
+test('all 16 modules have unique routes and can be found by title', () => {
+  assert.equal(modules.length, 16); assert.equal(new Set(modules.map((m) => m.path)).size, 16)
   for (const module of modules) assert.ok(searchModules(module.title).some((m) => m.id === module.id))
 })

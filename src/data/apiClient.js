@@ -61,8 +61,8 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
   const get = (path, signal) => request(path, signal)
   return {
     platform: (path = '', { body, params = {}, signal } = {}) => {
-      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|assistant-history|ask|management(?:\/read|\/preview|\/plan_[a-f0-9]{24}\/confirm)?|inventory\/import|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
-      const allowed = path === 'report' ? ['target','from','to','resource'] : path === 'audit' ? ['page','q'] : path === 'application-logs' ? ['page','q','level','from','to'] : path === 'assistant-history' ? ['before'] : []
+      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|assistant-history|ask|monitoring\/routeros\/read|inventory\/import|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}(?:\/restore)?|\/runs\/run_[a-f0-9]{24}|\/compare)?|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
+      const allowed = path === 'report' ? ['target','from','to','resource'] : path === 'audit' ? ['page','q'] : path === 'application-logs' ? ['page','q','level','from','to'] : path === 'assistant-history' ? ['before'] : path === 'device-backups/compare' ? ['left','right'] : []
       if (!valid || Object.keys(params).some((key) => !allowed.includes(key))) return Promise.reject(new ApiError('target_not_allowed'))
       const query = new URLSearchParams(params)
       return request(`/api/platform${path ? '/' + path : ''}${query.size ? '?' + query : ''}`, signal, body)
@@ -108,6 +108,12 @@ export const errorMessages = {
   ai_unavailable: 'Provider AI belum dapat menyelesaikan jawaban. Monitoring dan notifikasi tetap berjalan.',
   permission_denied: 'Role akun ini tidak mengizinkan tindakan tersebut.',
   credential_vault_unavailable: 'Vault kredensial belum siap atau kunci server tidak valid. Kredensial tidak dibaca atau disimpan.',
+  backup_unsupported: 'Backup belum tersedia untuk perangkat ini. Collector export baca-saja belum disiapkan.',
+  backup_busy: 'Backup perangkat ini sedang berjalan. Tunggu hingga pekerjaan selesai.',
+  backup_unavailable: 'File backup tidak dapat dibuka atau kunci enkripsinya tidak tersedia.',
+  backup_integrity_failed: 'Checksum backup tidak cocok. File tidak diberikan untuk diunduh atau dipulihkan.',
+  backup_device_mismatch: 'Versi yang dipilih berasal dari perangkat berbeda.',
+  restore_confirmation_required: 'Konfirmasi pemulihan tidak cocok. File tidak diunduh.',
   host_not_allowed: 'Alamat ini belum diizinkan untuk monitoring. Centang izin alamat saat mendaftarkan perangkat atau minta Administrator menambahkannya.',
   invalid_mac_address: 'MAC harus berformat AA:BB:CC:DD:EE:FF.',
   invalid_dhcp_tracking: 'Pelacakan DHCP memerlukan MAC perangkat dan metode ICMP.',

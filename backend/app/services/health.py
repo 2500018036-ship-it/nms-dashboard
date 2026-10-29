@@ -22,6 +22,8 @@ class Monitoring:
         self.platform=Platform(str(__import__('pathlib').Path(database.db.execute('PRAGMA database_list').fetchone()[2]).parent),settings)
         self.platform.apply(settings)
         self.router = MikroTik(settings)
+        from app.dashboard.device_backups import DeviceConfigBackups
+        self.device_backups = DeviceConfigBackups(self.platform, self)
         self.cache, self.locks, self.metrics = {}, {}, Counter()
         self.semaphore = asyncio.Semaphore(3)
         self.extra_targets=['wireguard','cisco_sf200','mikrotik_routes','network_traffic'] if settings.continuous_enabled else []

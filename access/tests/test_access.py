@@ -93,6 +93,21 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         r=await self.client.get('/access-api/catalog',headers=self.headers)
         self.assertEqual(r.status,401)
 
+    async def test_temporary_nms_auth_outage_keeps_session_but_does_not_renew_worker_lease(self):
+        identity='f'*32
+        self.gateway.sessions[identity]=Session(identity,'mikrotik','admin','owner-binding',time.time(),9999999999,time.time(),'private-cookie',None)
+        self.gateway.auth=AsyncMock(side_effect=web.HTTPServiceUnavailable())
+        await self.gateway.sweep_once()
+        self.assertIn(identity,self.gateway.sessions)
+        self.gateway.control.assert_not_awaited()
+
+    async def test_authorization_revocation_still_closes_session(self):
+        identity='1'*32
+        self.gateway.sessions[identity]=Session(identity,'mikrotik','admin','owner-binding',time.time(),9999999999,time.time(),'private-cookie',None)
+        self.gateway.auth=AsyncMock(side_effect=web.HTTPUnauthorized())
+        await self.gateway.sweep_once()
+        self.assertNotIn(identity,self.gateway.sessions)
+
     async def test_audit_has_lifecycle_metadata_without_cookie_or_password(self):
         self.gateway.record('admin','mikrotik','b'*32,'access.started')
         r=await self.client.get('/access-api/audit',headers=self.headers)

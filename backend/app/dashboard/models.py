@@ -146,5 +146,5 @@ def record(collection, body, allowed_hosts=(), targets=()):
 
 
 def public_validation_code(exc):
-    known={'host_not_allowed','invalid_mac_address','invalid_dhcp_tracking','duplicate_host','referenced_by_topology','monitor_limit','invalid_monitor_method','credential_host_mismatch','literal_ipv4_required','invalid_host','invalid_number','invalid_fields','invalid_methods','invalid_profile','invalid_type','invalid_text','url_host_mismatch','invalid_service_url','invalid_dns_query'}
+    known={'host_not_allowed','invalid_mac_address','invalid_dhcp_tracking','duplicate_host','referenced_by_topology','monitor_limit','invalid_monitor_method','credential_host_mismatch','literal_ipv4_required','invalid_host','invalid_number','invalid_fields','invalid_methods','invalid_profile','invalid_type','invalid_text','url_host_mismatch','invalid_service_url','invalid_dns_query','backup_unsupported','backup_busy','backup_unavailable','backup_integrity_failed','backup_device_mismatch','restore_confirmation_required','readonly_account_required','verified_api_ssl_required','permission_denied','authentication_failed','timeout','connection_failed','collector_busy','empty_backup','backup_too_large','sensitive_data_detected'}
     return str(exc) if str(exc) in known else 'validation_failed'

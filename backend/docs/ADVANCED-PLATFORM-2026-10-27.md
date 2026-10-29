@@ -1,5 +1,7 @@
 # Advanced Unified NMS — tahap fondasi manajemen
 
+> **Catatan arsip historis:** Dokumen ini merekam rancangan/implementasi 26–27 Oktober 2026. Pada branch pemulihan `codex/theaz-recovery-20261029`, seluruh alur preview/apply konfigurasi perangkat dan endpoint management tulis telah dihapus. Ikuti [laporan pemulihan terbaru](../../docs/THEAZ-RECOVERY-2026-10-29.md) untuk kemampuan aktif dan batas dukungan.
+
 Pekerjaan 26–27 Oktober 2026. Frontend Windows `C:/Users/Hype G12/Downloads/nms-dashboard` versi0.6.0; backend Debian `192.168.20.195:/mnt/data/www/nms-bot` versi1.3.0. Template Metis Bootstrap Admin3.6.0, Telegram bot, engine monitoring dan deployment Compose yang ada dipertahankan. Status di bawah membedakan kode, uji mock, dan verifikasi perangkat nyata.
 
 ## Hasil audit

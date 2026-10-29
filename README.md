@@ -1,4 +1,4 @@
-> Pembaruan terbaru: frontend0.6.0/backend1.3.1. Lihat [laporan Advanced NMS 27 Oktober](docs/ADVANCED-PLATFORM-2026-10-27.md) untuk pendaftaran collector, topologi/inventaris, RouterOS, role dan perubahan terkonfirmasi. Proxmox tetap monitoring sesuai keputusan pengguna.
+> Branch pemulihan lokal `codex/theaz-recovery-20261029` sedang memperbarui baseline historis di bawah. Produksi tetap memakai LibreNMS pada `nms.azrilachdi.web.id`; branch ini belum dipasang ke server atau proxy. Rincian yang sudah diterapkan dan batas dukungan ada di [laporan pemulihan 29 Oktober](docs/THEAZ-RECOVERY-2026-10-29.md).
 
 # Unified NMS Homelab Dashboard
 

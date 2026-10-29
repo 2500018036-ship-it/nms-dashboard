@@ -57,3 +57,23 @@ pre code { font-family: inherit; }
 @media(max-width:767px){.nms-topology-workspace{grid-template-columns:1fr}.nms-topology-palette{max-height:185px}.nms-topology-symbols{grid-template-columns:repeat(2,minmax(0,1fr))}.nms-topology-canvas{height:440px}}
 
 .theaz-brand-footer{width:90px;height:28px}
+
+.nms-device-wizard-steps{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;padding:0;margin:0 0 1.25rem;list-style:none}
+.nms-device-wizard-steps li{display:flex;align-items:center;gap:7px;min-width:0;color:var(--bs-secondary-color);font-size:.78rem}
+.nms-device-wizard-steps li span{display:grid;place-items:center;width:25px;height:25px;border:1px solid var(--bs-border-color);border-radius:50%;flex:0 0 auto}
+.nms-device-wizard-steps li.active{color:var(--bs-primary);font-weight:600}
+.nms-device-wizard-steps li.active span,.nms-device-wizard-steps li.complete span{border-color:var(--bs-primary);background:var(--bs-primary);color:#fff}
+.nms-monitor-method{display:flex;align-items:flex-start;gap:10px;border:1px solid var(--bs-border-color);border-radius:8px;padding:10px 12px;cursor:pointer}
+.nms-monitor-method:hover,.nms-monitor-method.selected{border-color:var(--bs-primary)}
+.nms-monitor-method.disabled{cursor:not-allowed;opacity:.68}
+.nms-monitor-method input{margin-top:.25rem;flex:0 0 auto}
+.nms-backup-diff{max-height:360px;overflow:auto;white-space:pre-wrap;overflow-wrap:anywhere;background:var(--bs-tertiary-bg);border:1px solid var(--bs-border-color);border-radius:6px;padding:12px;font-size:.8rem}
+@media(max-width:575.98px){.nms-device-wizard-steps{grid-template-columns:repeat(2,minmax(0,1fr))}.nms-device-wizard-steps li{font-size:.74rem}}
+
+.auth-main{animation:nms-auth-in .42s cubic-bezier(.2,.75,.3,1) both}
+.auth-aside{animation:nms-auth-aside-in .52s cubic-bezier(.2,.75,.3,1) .04s both}
+.auth-brand img{animation:nms-auth-logo-in .58s ease-out both}
+@keyframes nms-auth-in{from{opacity:0;transform:translateY(9px)}to{opacity:1;transform:translateY(0)}}
+@keyframes nms-auth-aside-in{from{opacity:.35;transform:translateX(8px)}to{opacity:1;transform:translateX(0)}}
+@keyframes nms-auth-logo-in{from{opacity:.55;transform:scale(.98)}to{opacity:1;transform:scale(1)}}
+@media(prefers-reduced-motion:reduce){.auth-main,.auth-aside,.auth-brand img{animation:none}}

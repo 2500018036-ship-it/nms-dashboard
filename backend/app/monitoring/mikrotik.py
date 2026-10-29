@@ -63,6 +63,71 @@ class MikroTik:
             return self.failure(section, 'invalid_arguments')
         return await self.collect(section, offset, limit, filter_field, filter_value)
 
+    async def export_configuration(self):
+        """Return a secrets-hidden text export over the existing verified API-SSL path."""
+        if not self.settings.mikrotik_readonly:
+            raise RuntimeError('readonly_account_required')
+        check = await self.collect('system', fresh=True)
+        if check.get('status') not in {'UP', 'DEGRADED'} or check.get('credential_privilege') != 'read-only':
+            raise RuntimeError(check.get('error', 'readonly_account_required'))
+        try:
+            await asyncio.wait_for(self.async_lock.acquire(), 2)
+        except asyncio.TimeoutError:
+            raise RuntimeError('collector_busy') from None
+        try:
+            return await asyncio.to_thread(self._export_configuration)
+        finally:
+            self.async_lock.release()
+
+    def _export_configuration(self):
+        if not self.lock.acquire(blocking=False):
+            raise RuntimeError('collector_busy')
+        pool = None
+        try:
+            port = int(os.getenv('MIKROTIK_PORT', '8729'))
+            if port != 8729 or os.getenv('MIKROTIK_SSL_VERIFY', 'true').lower() != 'true':
+                raise RuntimeError('verified_api_ssl_required')
+            pool = routeros_api.RouterOsApiPool(os.getenv('MIKROTIK_HOST', '192.168.20.1'),
+                username=os.environ['MIKROTIK_USER'], password=os.environ['MIKROTIK_PASSWORD'],
+                port=port, use_ssl=True, ssl_verify=True, ssl_verify_hostname=True,
+                ssl_context=ssl.create_default_context(cafile=os.getenv('MIKROTIK_CA_FILE') or None),
+                plaintext_login=True)
+            pool.socket_timeout = LOGIN_TIMEOUT
+            api = pool.get_api()
+            # API export is a read command. Never ask the router to create a file or
+            # reveal secrets; the application stores an encrypted copy on its data volume.
+            rows = api.get_binary_resource('/').call('export', {'show-sensitive': 'no'})
+            lines = []
+            size = 0
+            for row in rows:
+                if not isinstance(row, dict):
+                    continue
+                for value in row.values():
+                    if isinstance(value, bytes):
+                        value = value.decode('utf-8', errors='strict')
+                    if isinstance(value, str) and value:
+                        size += len(value.encode('utf-8'))
+                        if size > 2 * 1024 * 1024:
+                            raise RuntimeError('backup_too_large')
+                        lines.append(value)
+            text = '\n'.join(lines).strip() + '\n'
+            if not text.strip():
+                raise RuntimeError('empty_backup')
+            if re.search(r'(?im)^\s*[^#\n]*(?:password|secret|private-key|private-key-passphrase|pre-shared-key)\s*=\s*[^\s#]+', text):
+                raise RuntimeError('sensitive_data_detected')
+            return text
+        except RuntimeError:
+            raise
+        except Exception as exc:
+            raise RuntimeError(error_category(exc)) from None
+        finally:
+            try:
+                if pool:
+                    pool.disconnect()
+            except Exception:
+                pass
+            self.lock.release()
+
     async def collect(self, section='system', offset=0, limit=100, filter_field='', filter_value='',fresh=False):
         if not isinstance(section, str):
             return self.failure('invalid', 'invalid_arguments')

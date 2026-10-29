@@ -60,6 +60,7 @@ export function AccessPortalPage() {
   const [error, setError] = useState('')
   const [busy, setBusy] = useState(false)
   const [audit, setAudit] = useState(null)
+  const [displayAttempt, setDisplayAttempt] = useState(0)
   const current = useRef(null)
   const lastActivity = useRef(0)
   useEffect(() => {
@@ -68,10 +69,25 @@ export function AccessPortalPage() {
     return () => controller.abort()
   }, [platform.client])
   useEffect(() => {
-    if (!session || session.state !== 'starting') return
-    const timer = setInterval(() => accessRequest('/sessions/' + session.id).then(setSession).catch((e) => setError(e.message)), 2000)
-    return () => clearInterval(timer)
-  }, [session])
+    const identity=session?.id
+    if (!identity || session.state !== 'starting') return
+    let active=true;let timer
+    const poll=async()=>{
+      try {
+        const value=await accessRequest('/sessions/'+identity)
+        if(!active)return
+        setSession(value)
+        if(value.state==='starting')timer=setTimeout(poll,2000)
+      } catch(e) {
+        if(!active)return
+        setError(e.message)
+        if(['session_not_found','session_expired'].includes(e.message)) {current.current=null;setSession(null);setState('idle')}
+        else timer=setTimeout(poll,3000)
+      }
+    }
+    timer=setTimeout(poll,1000)
+    return ()=>{active=false;clearTimeout(timer)}
+  }, [session?.id,session?.state])
   useEffect(() => { mounted.current = true; return () => {
     mounted.current = false
     if (current.current) fetch('/access-api/sessions/' + current.current, { method: 'DELETE', credentials: 'same-origin', keepalive: true }).catch(() => {})
@@ -114,8 +130,8 @@ export function AccessPortalPage() {
       {catalog && !catalog.enabled && <div className="alert alert-info">Runtime akses belum diaktifkan. Aktivasi perubahan NMS dan reverse proxy menunggu persetujuan pengelola.</div>}
       <div className="d-flex flex-wrap gap-2">{catalog?.targets.map((target) => <button key={target.id} className={`btn ${session?.target === target.id ? 'btn-primary' : 'btn-outline-primary'}`} disabled={!catalog.enabled || !target.allowed || busy} title={target.allowed ? target.url : 'Belum diizinkan untuk akun atau perangkat ini'} onClick={() => open(target.id)}>{target.name}</button>)}</div>
     </Panel>
-    {session && <Panel title={selected?.name || 'GUI perangkat'} subtitle={`Sesi ${state === 'connected' ? 'terhubung' : session.state === 'starting' ? 'sedang disiapkan' : state} · Berakhir ${formatTime(session.expires_at)}`} action={<button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={close}>Tutup sesi</button>}>
-      {session.state === 'ready' ? <NativeDisplay key={session.id} session={session} onState={setState} onActivity={activity} /> : <div className="py-5 text-center" role="status">{session.state === 'failed' ? 'Browser sesi gagal dimulai. Tutup sesi lalu periksa runtime.' : <><span className="spinner-border text-primary" /><p className="mt-3">Menyiapkan GUI asli…</p></>}</div>}
+    {session && <Panel title={selected?.name || 'GUI perangkat'} subtitle={`Sesi ${state === 'connected' ? 'terhubung' : session.state === 'starting' ? 'sedang disiapkan' : state} · Berakhir ${formatTime(session.expires_at)}`} action={<div className="d-flex gap-2">{session.state==='ready'&&['disconnected','failed'].includes(state)&&<button className="btn btn-sm btn-outline-primary" onClick={()=>{setState('connecting');setDisplayAttempt((value)=>value+1)}}>Sambungkan layar ulang</button>}<button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={close}>Tutup sesi</button></div>}>
+      {session.state === 'ready' ? <NativeDisplay key={`${session.id}-${displayAttempt}`} session={session} onState={setState} onActivity={activity} /> : <div className="py-5 text-center" role="status">{session.state === 'failed' ? 'Browser sesi gagal dimulai. Tutup sesi lalu periksa runtime.' : <><span className="spinner-border text-primary" /><p className="mt-3">Menyiapkan GUI asli…</p></>}</div>}
       {session.state === 'ready' && <AccessFiles session={session} />}
     </Panel>}
     {!session && <div className="alert alert-secondary">Sesi GUI dipisahkan per login dan berakhir otomatis saat tidak digunakan. Hak di dalam perangkat mengikuti akun asli perangkat tersebut.</div>}

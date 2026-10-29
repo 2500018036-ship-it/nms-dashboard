@@ -81,6 +81,16 @@ class Scheduler:
                 log.exception('scheduler_cycle_failed')
             await asyncio.sleep(max(10,self.settings.poll_interval-(time.monotonic()-start)))
 
+    async def device_backups(self):
+        while True:
+            try:
+                await self.monitor.device_backups.run_due()
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:
+                log.error('device_backup_scheduler_failed category=%s',type(exc).__name__)
+            await asyncio.sleep(60)
+
     def observe_devices(self,results):
         for value in results:
             target=self.settings.targets.get(value['target'],{})

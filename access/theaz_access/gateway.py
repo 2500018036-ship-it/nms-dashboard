@@ -130,30 +130,37 @@ class Gateway:
             self.sessions.pop(identity, None)
             self.record(item.actor, item.target, identity, 'access.stopped', reason)
 
+    async def sweep_once(self):
+        for identity, item in list(self.sessions.items()):
+            reason = None
+            if time.time() >= item.expires:
+                reason = 'lifetime_expired'
+            elif time.time() - item.activity > self.config['idle_seconds']:
+                reason = 'idle_expired'
+            else:
+                try:
+                    user = await self.auth(item.cookie, item.target)
+                    if user['binding'] != item.binding:
+                        reason = 'session_revoked'
+                except web.HTTPServiceUnavailable:
+                    # Keep an active browser session during a brief NMS API outage.
+                    # The broker lease expires after 90 seconds if authorization stays unavailable.
+                    continue
+                except web.HTTPException:
+                    reason = 'authorization_revoked'
+            try:
+                if reason:
+                    await self.close(identity, reason)
+                else:
+                    await self.control('POST', '/workers/' + identity + '/lease', {})
+            except (ClientError, OSError, web.HTTPException):
+                # Broker independently expires orphaned workers after 90 seconds.
+                pass
+
     async def sweep(self):
         while True:
             await asyncio.sleep(10)
-            for identity, item in list(self.sessions.items()):
-                reason = None
-                if time.time() >= item.expires:
-                    reason = 'lifetime_expired'
-                elif time.time() - item.activity > self.config['idle_seconds']:
-                    reason = 'idle_expired'
-                else:
-                    try:
-                        user = await self.auth(item.cookie, item.target)
-                        if user['binding'] != item.binding:
-                            reason = 'session_revoked'
-                    except web.HTTPException:
-                        reason = 'authorization_revoked_or_unavailable'
-                try:
-                    if reason:
-                        await self.close(identity, reason)
-                    else:
-                        await self.control('POST', '/workers/' + identity + '/lease', {})
-                except (ClientError, OSError, web.HTTPException):
-                    # Broker independently expires orphaned workers after 90 seconds.
-                    pass
+            await self.sweep_once()
 
 
 def app(gateway):

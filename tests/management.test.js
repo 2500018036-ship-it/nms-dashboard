@@ -8,13 +8,21 @@ import { adaptStatus } from '../src/data/adapters.js'
 import { inventoryValue } from '../src/devices/serverInventory.js'
 import { validateDevice } from '../src/devices/model.js'
 
-test('management client only exposes preview read and exact confirmation endpoints',async()=>{
+test('native device configuration is not exposed; read-only monitoring and backup routes remain scoped',async()=>{
  const calls=[];const client=createApiClient({enabled:true,base:'/nms-api'},async(url)=>{calls.push(url);return new Response('{}',{headers:{'content-type':'application/json'}})})
- for(const path of ['management','management/read','management/preview','management/plan_'+'a'.repeat(24)+'/confirm']){
-  await client.platform(path,path==='management'?{}:{body:{}})
-  assert.ok(isGatewayRequest(path==='management'?'GET':'POST','/nms-api/api/platform/'+path,'/nms-api'))
+ await client.platform('monitoring/routeros/read',{body:{section:'system'}})
+ await client.platform('device-backups/compare',{params:{left:'backup_'+'a'.repeat(24),right:'backup_'+'b'.repeat(24)}})
+ await client.platform('device-backups/inv_'+'a'.repeat(24)+'/policy',{body:{enabled:true,interval_seconds:86400,retention_versions:30}})
+ await client.platform('device-backups/backup_'+'a'.repeat(24)+'/restore',{body:{confirmation:'RESTORE backup_'+'a'.repeat(24)}})
+ assert.ok(isGatewayRequest('POST','/nms-api/api/platform/monitoring/routeros/read','/nms-api'))
+ assert.ok(isGatewayRequest('GET','/nms-api/api/platform/device-backups/compare?left=x&right=y','/nms-api'))
+ assert.ok(isGatewayRequest('POST','/nms-api/api/platform/device-backups/inv_'+'a'.repeat(24)+'/run','/nms-api'))
+ assert.ok(isGatewayRequest('POST','/nms-api/api/platform/device-backups/inv_'+'a'.repeat(24)+'/policy','/nms-api'))
+ assert.ok(isGatewayRequest('GET','/nms-api/api/platform/device-backups/backup_'+'a'.repeat(24),'/nms-api'))
+ assert.ok(isGatewayRequest('POST','/nms-api/api/platform/device-backups/backup_'+'a'.repeat(24)+'/restore','/nms-api'))
+ for(const path of ['management','management/read','management/preview','management/plan_'+'a'.repeat(24)+'/confirm','management/exec','management/shell']){
+  await assert.rejects(client.platform(path),{code:'target_not_allowed'})
  }
- for(const path of ['management/exec','management/shell','management/plan_x/confirm','management/preview/../../shell'])await assert.rejects(client.platform(path),{code:'target_not_allowed'})
  assert.equal(calls.length,4)
 })
 test('role contract accepts granular roles and rejects invented privilege',()=>{

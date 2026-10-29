@@ -16,6 +16,7 @@ import { DevicesPage } from '../pages/DevicesPage'
 import { AlertsPage } from '../pages/AlertsPage'
 import { AccessPortalPage } from '../pages/AccessPortalPage'
 import { ManagementPage } from '../pages/ManagementPage'
+import { BackupRestorePage } from '../pages/BackupRestorePage'
 import { TopologyEditor } from '../pages/TopologyEditor'
 import { IntegrationsPage, ServiceDetailPage } from '../pages/IntegrationsPage'
 import { ProxmoxPage, DeviceDetailPage } from '../pages/ResourcePages'
@@ -46,6 +47,7 @@ export function AppRouter() {
           <Route path="devices" element={<DevicesPage />} />
           <Route path="access" element={<AccessPortalPage />} />
           <Route path="management" element={<ManagementPage />} />
+          <Route path="backups" element={<BackupRestorePage />} />
           <Route path="alerts" element={<AlertsPage />} />
           <Route path="assistant" element={<AssistantPage />} />
           <Route path="settings" element={<PlatformSettings />} />

@@ -8,7 +8,7 @@ import sqlite3
 import tempfile
 import time
 import unittest
-from unittest.mock import patch,AsyncMock
+from unittest.mock import patch,AsyncMock,Mock
 from app.config import Settings
 from app.storage.database import Database
 from app.dashboard import models
@@ -137,6 +137,8 @@ class PlatformAPITests(unittest.TestCase):
         self.assertEqual(self.request('/api/platform/users')[0],403)
         self.assertEqual(self.request('/api/platform/audit')[0],200)
         self.assertEqual(self.request('/api/platform/management/preview','POST',dict(operation='proxmox.guest.start',params=dict(node='pve',kind='qemu',vmid=100)))[0],403)
+        self.admin()
+        self.assertEqual(self.request('/api/platform/management/preview','POST',dict(operation='proxmox.guest.start',params=dict(node='pve',kind='qemu',vmid=100)))[0],404)
     def test_auth_and_rbac_enforced_on_server(self):
         self.assertEqual(self.request('/api/platform')[0],401)
         self.login();self.assertFalse(self.request('/api/platform')[1]['capabilities']['manage'])
@@ -145,6 +147,21 @@ class PlatformAPITests(unittest.TestCase):
         self.assertEqual(self.request('/api/platform/users')[0],403)
         self.admin();self.assertTrue(self.request('/api/platform')[1]['capabilities']['manage'])
         self.assertEqual(self.request('/api/platform/users')[0],200)
+    def test_device_backup_routes_require_backup_role_and_audit_scope(self):
+        self.login()
+        self.assertEqual(self.request('/api/platform/device-backups')[0],403)
+        self.assertEqual(self.request('/api/platform/device-backups/inv_'+'a'*24+'/run','POST',{})[0],403)
+        self.admin()
+        fake=Mock()
+        fake.catalog.return_value={'devices':[],'runs':[],'restore_mode':'manual-native-gui'}
+        fake.start_manual.return_value={'id':'run_'+'b'*24,'state':'RUNNING'}
+        fake.save_policy.return_value={'enabled':True}
+        fake.prepare_restore.return_value={'mode':'manual-native-gui'}
+        self.server.platform.device_backups=fake
+        self.assertEqual(self.request('/api/platform/device-backups')[0],200)
+        self.assertEqual(self.request('/api/platform/device-backups/inv_'+'a'*24+'/run','POST',{})[0],200)
+        self.assertEqual(self.request('/api/platform/device-backups/inv_'+'a'*24+'/policy','POST',{'enabled':True,'interval_seconds':3600,'retention_versions':5})[0],200)
+        self.assertEqual(self.request('/api/platform/device-backups/backup_'+'c'*24+'/restore','POST',{'confirmation':'RESTORE backup_'+'c'*24})[0],200)
     def test_topology_api_conflict_and_delete(self):
         self.admin();value=dict(name='Test',nodes=[],links=[])
         code,item,_=self.request('/api/platform/topologies','POST',{'value':value});self.assertEqual(code,200)

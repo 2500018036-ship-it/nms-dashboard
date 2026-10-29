@@ -9,11 +9,11 @@ export function validateProxyTarget(value) {
 export function isReadOnlyRequest(method, requestUrl, base) {
   if (method !== 'GET') return false
   const path = new URL(requestUrl, 'http://localhost').pathname.slice(base.length)
-  return /^\/api\/platform(?:$|\/(?:access|settings|export|users|audit|report|application-logs|assistant-history|management|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80})?|jobs\/job_[a-f0-9]{24})$)/.test(path) || credentialsPath.test(path) || allowedEndpoints.has(path) || /^\/api\/devices\/device_[a-f0-9]{12}$/.test(path) || /^\/api\/incidents\/inc_(event_[1-9]\d{0,14}|state_[a-f0-9]{20})$/.test(path)
+  return /^\/api\/platform(?:$|\/(?:access|settings|export|users|audit|report|application-logs|assistant-history|device-backups(?:\/runs\/run_[a-f0-9]{24}|\/backup_[a-f0-9]{24}|\/compare)?|monitoring\/enrollment|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80})?|jobs\/job_[a-f0-9]{24})$)/.test(path) || credentialsPath.test(path) || allowedEndpoints.has(path) || /^\/api\/devices\/device_[a-f0-9]{12}$/.test(path) || /^\/api\/incidents\/inc_(event_[1-9]\d{0,14}|state_[a-f0-9]{20})$/.test(path)
 }
 export function isGatewayRequest(method, requestUrl, base) {
   const path = new URL(requestUrl, 'http://localhost').pathname.slice(base.length)
-  return isReadOnlyRequest(method, requestUrl, base) || method === 'POST' && (['/api/auth/login', '/api/auth/logout'].includes(path) || credentialsPath.test(path) || /^\/api\/platform\/(?:settings|restore|users|ask|management(?:\/read|\/preview|\/plan_[a-f0-9]{24}\/confirm)?|inventory\/import|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path))
+  return isReadOnlyRequest(method, requestUrl, base) || method === 'POST' && (['/api/auth/login', '/api/auth/logout'].includes(path) || credentialsPath.test(path) || /^\/api\/platform\/(?:settings|restore|users|ask|monitoring\/routeros\/read|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}\/restore)?|inventory\/import|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path))
 }
 export function sameOriginRequest(headers) {
   try { const origin = new URL(headers.origin); return ['http:', 'https:'].includes(origin.protocol) && origin.host === headers.host && headers['sec-fetch-site'] !== 'cross-site' }

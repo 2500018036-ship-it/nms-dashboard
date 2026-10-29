@@ -11,7 +11,8 @@ export const modules = [
   { id: 'reports', path: '/reports', title: 'Laporan dan Riwayat', icon: 'bar-chart-line', group: 'Observability', description: 'Riwayat resource dan kejadian untuk evaluasi operasional.' },
   { id: 'health', path: '/system-health', title: 'Kesehatan Sistem NMS', icon: 'heart-pulse', group: 'Observability', description: 'Koneksi data, kesegaran sampel, dan kesiapan collector NMS.' },
   { id: 'settings', path: '/settings', title: 'Pengaturan Sistem', icon: 'sliders2', group: 'Administration', description: 'Konfigurasi sistem dan kebijakan operasional.' },
-  { id: 'management', path: '/management', title: 'Manajemen Koneksi Perangkat', navTitle: 'Manajemen Perangkat', icon: 'tools', group: 'Administration', description: 'Pendaftaran collector, koneksi perangkat, preview dan konfirmasi perubahan.' },
+  { id: 'management', path: '/management', title: 'Perangkat dan Inventaris', navTitle: 'Perangkat', icon: 'router', group: 'Administration', description: 'Wizard onboarding, monitoring, dan akses GUI asli perangkat.' },
+  { id: 'backups', path: '/backups', title: 'Backup & Restore Perangkat', navTitle: 'Backup perangkat', icon: 'archive', group: 'Administration', description: 'Arsip konfigurasi terenkripsi untuk adapter perangkat yang mendukung export baca-saja.' },
   { id: 'integrations', path: '/integrations', title: 'Integrasi dan Kredensial', navTitle: 'Integrasi', icon: 'plug', group: 'Administration', description: 'Status integrasi API dan batas akses frontend.' },
   { id: 'users', path: '/users', title: 'Pengguna dan Log Audit', icon: 'people', group: 'Administration', description: 'Fondasi pengelolaan akses dan jejak audit administratif.' },
 ]

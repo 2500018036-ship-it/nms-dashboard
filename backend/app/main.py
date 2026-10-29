@@ -52,6 +52,7 @@ def build(settings=None):
         scheduler=Scheduler(settings,database,monitor,app.bot)
         scheduler.readiness=lambda:app.running and app.updater.running
         app.bot_data['tasks']=[asyncio.create_task(scheduler.run(),name='monitor-scheduler'),asyncio.create_task(scheduler.heartbeat(),name='heartbeat'),
+            asyncio.create_task(scheduler.device_backups(),name='device-config-backups'),
             asyncio.create_task(scheduler.notifier(),name='notification-worker')]
         if settings.continuous_enabled:
             from app.services.network import NetworkService

@@ -18,7 +18,7 @@ class LifecycleTests(unittest.IsolatedAsyncioTestCase):
             with patch.object(ExtBot,'get_me',AsyncMock()) as get_me:
                 await app.post_init(app)
                 get_me.assert_awaited_once()
-                self.assertEqual(len(app.bot_data['tasks']),3)
+                self.assertEqual({task.get_name() for task in app.bot_data['tasks']},{'monitor-scheduler','heartbeat','device-config-backups','notification-worker'})
                 await app.post_stop(app)
                 self.assertNotIn('tasks',app.bot_data)
                 await app.post_shutdown(app)

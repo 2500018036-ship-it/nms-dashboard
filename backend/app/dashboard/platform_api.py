@@ -21,8 +21,7 @@ class PlatformAPI:
         self.owner,self.monitor,self.agent,self.loop=owner,monitor,agent,loop
         self.store=Platform(owner.settings.data_dir,owner.settings)
         self.credentials=CredentialVault(self.store)
-        from app.management.service import Management
-        self.management=Management(self.store,monitor,loop)
+        self.device_backups=getattr(monitor,'device_backups',None)
         self.jobs={};self.job_lock=threading.Lock();self.questions=deque();self.probes=deque()
         from app.dashboard.assistant_history import AssistantHistory
         self.assistant_history=AssistantHistory(self.store)
@@ -51,12 +50,12 @@ class PlatformAPI:
             target_type,identity=credential_match.groups()
             self.require_credential_target(target_type,identity)
             return self.credentials.read(target_type,identity,actor)
-        if path=='/api/platform/management':
-            self.permitted(session,models.ROLES)
+        if path=='/api/platform/monitoring/enrollment':
+            actor=self.permitted(session,models.ROLES)
             if query:raise ValueError('invalid_query')
             from app.dashboard.permissions import permissions
             import os
-            return {**self.management.list(session),'permissions':sorted(permissions(session)),
+            return {'permissions':sorted(permissions(session)),
                 'routeros_sections':[{'id':key,'label':spec.title} for key,spec in __import__('app.monitoring.mikrotik_catalog',fromlist=['SECTIONS']).SECTIONS.items()],
                 'credential_profiles':[{'id':'routeros-default','kind':'routeros','host':os.getenv('MIKROTIK_HOST','192.168.20.1'),'configured':bool(os.getenv('MIKROTIK_USER') and os.getenv('MIKROTIK_PASSWORD'))},
                     {'id':'proxmox-default','kind':'proxmox','host':os.getenv('PROXMOX_HOST','192.168.20.200'),'configured':bool(os.getenv('PROXMOX_TOKEN_ID') and os.getenv('PROXMOX_TOKEN_SECRET'))}],
@@ -73,12 +72,33 @@ class PlatformAPI:
         if path=='/api/platform/audit':
             from app.dashboard.permissions import require
             require(session,'audit.read');return self.store.audit_page(query)
+        if path=='/api/platform/device-backups':
+            if query:raise ValueError('invalid_query')
+            from app.dashboard.permissions import require
+            require(session,'backup.read')
+            if not self.device_backups:raise ValueError('backup_unavailable')
+            return self.device_backups.catalog()
+        if path.startswith('/api/platform/device-backups/'):
+            from app.dashboard.permissions import require
+            actor=require(session,'backup.read')
+            if not self.device_backups:raise ValueError('backup_unavailable')
+            parts=path.removeprefix('/api/platform/device-backups/').split('/')
+            if len(parts)==2 and parts[0]=='runs' and re.fullmatch(r'run_[a-f0-9]{24}',parts[1]):
+                if query:raise ValueError('invalid_query')
+                return self.device_backups.run_status(parts[1])
+            if len(parts)==2 and parts[0]=='compare':
+                if set(query)-{'left','right'} or any(len(v)!=1 for v in query.values()):raise ValueError('invalid_query')
+                return self.device_backups.compare(query.get('left',[''])[0],query.get('right',[''])[0],actor)
+            if len(parts)==1 and re.fullmatch(r'backup_[a-f0-9]{24}',parts[0]):
+                if query:raise ValueError('invalid_query')
+                return self.device_backups.download(parts[0],actor)
+            raise Missing()
         if query:raise ValueError('invalid_query')
         if path=='/api/platform':
             from app.dashboard.permissions import permissions
             return {'capabilities':{'manage':bool(session and session['user']['role'] in {'Administrator','Super Administrator'}),
                 'acknowledge':'incidents.manage' in permissions(session),'assistant':bool(self.agent and self.loop),
-                'device_enrollment':True,'discovery':'cached-observations','embedding':'header-checked-sandbox','device_actions':'confirmed-allowlist','permissions':sorted(permissions(session)),
+                'device_enrollment':True,'discovery':'cached-observations','embedding':'header-checked-sandbox','device_actions':'native-gui-only','permissions':sorted(permissions(session)),
                 'inventory_targets':{r['id']:self.store.inventory_target(r) for r in self.store.list('inventory')}},
                 'settings':self.store.get_settings(),'integrations':self.catalog(),'topologies':self.store.list('topologies'),
                 'inventory':self.store.list('inventory'),'maintenance':self.store.list('maintenance'),'server_time':time.time()}
@@ -130,9 +150,24 @@ class PlatformAPI:
             self.require_credential_target(target_type,identity)
             models.fields(body,('credentials',),('credentials',))
             return self.credentials.save(target_type,identity,body['credentials'],actor)
-        if path=='/api/platform/management/read':return self.read_router(body,session)
-        if path=='/api/platform/management/preview':return self.management.preview(body,session)
-        if re.fullmatch(r'/api/platform/management/plan_[a-f0-9]{24}/confirm',path):return self.management.confirm(path.split('/')[-2],body,session)
+        if path=='/api/platform/monitoring/routeros/read':return self.read_router(body,session)
+        backup_match=re.fullmatch(r'/api/platform/device-backups/(inv_[a-f0-9]{24})/(run|policy)',path)
+        if backup_match:
+            from app.dashboard.permissions import require
+            actor=require(session,'backup.manage')
+            if not self.device_backups:raise ValueError('backup_unavailable')
+            identity,action=backup_match.groups()
+            if action=='run':
+                if body:raise ValueError('invalid_fields')
+                return self.device_backups.start_manual(identity,actor,self.loop)
+            return self.device_backups.save_policy(identity,body,actor)
+        restore_match=re.fullmatch(r'/api/platform/device-backups/(backup_[a-f0-9]{24})/restore',path)
+        if restore_match:
+            from app.dashboard.permissions import require
+            actor=require(session,'backup.manage')
+            models.fields(body,('confirmation',),('confirmation',))
+            if not self.device_backups:raise ValueError('backup_unavailable')
+            return self.device_backups.prepare_restore(restore_match.group(1),body['confirmation'],actor)
         if re.fullmatch(r'/api/platform/inventory/inv_[a-f0-9]{24}/test',path):return self.test_inventory(path.split('/')[-2],body,session)
         if body.get('detach_topology'):
             from app.dashboard.permissions import require

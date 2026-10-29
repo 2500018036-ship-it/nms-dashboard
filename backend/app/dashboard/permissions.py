@@ -1,7 +1,7 @@
 """Server-authoritative role capabilities. Legacy role names remain compatible."""
 READ={'monitor.read','assistant.ask'}
-NETWORK={'gui.access','inventory.manage','network.change','topology.manage'}
-SERVER={'gui.access','inventory.manage','server.operate','topology.manage'}
+NETWORK={'gui.access','inventory.manage','topology.manage','backup.read','backup.manage'}
+SERVER={'gui.access','inventory.manage','topology.manage','backup.read','backup.manage'}
 ALL=READ|NETWORK|SERVER|{'config.manage','credentials.read','credentials.manage','users.manage','incidents.manage','audit.read'}
 ROLE_PERMISSIONS={
  'Read-only operator':READ,'Viewer':READ,
