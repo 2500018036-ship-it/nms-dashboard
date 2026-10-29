@@ -42,21 +42,36 @@ async def main():
         proxy=await serve(root/'egress.sock',fixture_url)
         os.chown(root/'egress.sock',31000,31000);os.chmod(root/'egress.sock',0o600)
         name='theaz-access-smoke'
+        # Force display startup to lag behind the Unix bridge. A ready flag must
+        # promise a live RFB greeting, not merely an existing socket pathname.
+        delayed_vnc=root/'fixture-x11vnc'
+        delayed_vnc.write_text('#!/bin/sh\nsleep 3\nexec /usr/bin/x11vnc "$@"\n')
+        delayed_vnc.chmod(0o755)
         command=['docker','run','-d','--name',name,'--network','none','--user','31000:31000','--read-only','--init',
           '--cap-drop','ALL','--security-opt','no-new-privileges:true','--security-opt','seccomp='+str(Path('access/worker/seccomp.json').resolve()),
           '--memory','1g','--cpus','1','--pids-limit','256','--shm-size','128m','--tmpfs','/tmp:rw,nosuid,nodev,size=128m,mode=1777',
-          '--mount','type=bind,src='+directory+',dst=/run/session',os.getenv('ACCESS_TEST_WORKER_IMAGE','theaz-access-worker:test')]
+          '--mount','type=bind,src='+directory+',dst=/run/session',
+          '--mount','type=bind,src='+str(delayed_vnc)+',dst=/usr/local/bin/x11vnc,readonly',os.getenv('ACCESS_TEST_WORKER_IMAGE','theaz-access-worker:test')]
         try:
             await asyncio.to_thread(subprocess.run,command,check=True,stdout=subprocess.DEVNULL)
+            display_verified=False
             for _ in range(120):
-                if all(visited.values()):break
-                if (root/'state.json').exists() and json.loads((root/'state.json').read_text()).get('state')=='failed':
+                state=json.loads((root/'state.json').read_text()).get('state') if (root/'state.json').exists() else 'starting'
+                if state=='ready' and not display_verified:
+                    reader,writer=await asyncio.open_unix_connection(str(root/'vnc.sock'))
+                    banner=await asyncio.wait_for(reader.readexactly(12),5)
+                    assert banner.startswith(b'RFB 003.')
+                    writer.close();await writer.wait_closed()
+                    display_verified=True
+                if all(visited.values()) and display_verified:break
+                if state=='failed':
                     # Only fixture traffic is present; useful CI diagnostics, no production data.
                     diagnostic = root/'fixture-runtime.log'
                     if diagnostic.exists():print(diagnostic.read_text(errors='replace'),flush=True)
                     raise AssertionError('Browser sandbox/runtime failed')
                 await asyncio.sleep(0.5)
             assert all(visited.values()),visited
+            assert display_verified,'Display was never ready'
             reader,writer=await asyncio.open_unix_connection(str(root/'vnc.sock'))
             banner=await asyncio.wait_for(reader.readexactly(12),5)
             assert banner.startswith(b'RFB 003.')

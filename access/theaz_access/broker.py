@@ -88,8 +88,15 @@ class Broker:
     async def stop(self, identity):
         check_sid(identity)
         if identity in self.workers:
-            await self.docker('rm', '-f', 'theaz-access-' + identity)
-            self.workers.pop(identity)
+            name='theaz-access-'+identity
+            try:
+                await self.docker('rm', '-f', name)
+            except (RuntimeError, OSError):
+                # The daemon can finish removal after the CLI times out. Confirm
+                # absence before releasing capacity; retain real workers on failure.
+                remaining=await self.docker('ps','-a','--filter','name=^/'+name+'$','--filter','label=theaz.access.managed=true','--format','{{.ID}}')
+                if remaining:raise
+            self.workers.pop(identity,None)
             self.erase(identity)
 
     async def recover(self):
