@@ -35,3 +35,12 @@ phpMyAdmin/HTTP memakai origin internal yang tepat. Dua virtual host HTTPS sudah
 Regresi kebijakan memverifikasi origin/port persis dan menolak hostname lain, loopback, link-local/metadata, multicast, serta alamat tak ditentukan. Hak GUI tambahan dibatasi pada Administrator, Super Administrator, dan Server Administrator. Pembaruan package broker/config root tetap memerlukan aktivasi terkontrol sesuai deploy/access/ACTIVATION.md; image gateway/worker mengikuti CI.
 
 Visual portfolio awal tanpa CSS menunjukkan dependensi eksternal. Audit HTML sumber menetapkan tiga origin aset hanya untuk target portfolio: cdn.tailwindcss.com, fonts.googleapis.com, dan fonts.gstatic.com. Ketiganya dipatok ke alamat IPv4 publik hasil audit, memakai TLS asli, tanpa wildcard. Origin aset ini tidak diizinkan untuk GUI lain.
+
+
+## Regresi runtime yang ditemukan pada verifikasi publik
+
+Penghapusan kontainer sesi kadang selesai di Docker setelah CLI melewati timeout. Broker sebelumnya mempertahankan slot meskipun kontainer telah hilang. Stop kini mengonfirmasi keberadaan kontainer dengan nama dan label persis, melepas slot hanya ketika penghapusan terkonfirmasi, dan aman dipanggil bersamaan oleh penutupan sesi dan lease cleanup. Kegagalan daemon yang belum dapat dipastikan tetap mempertahankan slot.
+
+Worker kini menerbitkan status ready setelah benar-benar menerima greeting RFB dari server tampilan. CI menunda x11vnc secara sengaja untuk memverifikasi status ready tidak muncul hanya karena pathname socket sudah ada. Tidak ada perubahan jaringan atau konfigurasi perangkat.
+
+Unit broker mempertahankan direktori socket saat restart otomatis. Selector image dibaca melalui direktori read-only, sehingga pembaruan selector secara atomic rename terlihat tanpa mempertahankan inode file lama. Direktori tetap tidak dapat ditulis oleh broker.

@@ -3,6 +3,7 @@ import json
 import os
 from pathlib import Path
 import signal
+import socket
 import subprocess
 import time
 
@@ -61,9 +62,24 @@ arguments = ['chromium', '--user-data-dir=' + str(profile), '--no-first-run', '-
 if config.get('tls_spki'):
     arguments.append('--ignore-certificate-errors-spki-list=' + ','.join(config['tls_spki']))
 browser = launch(arguments, environment)
-time.sleep(1)
-if browser.poll() is not None:
-    (root / 'state.json').write_text('{"state":"failed","error":"browser_start_failed"}')
+ready=False
+deadline=time.monotonic()+25
+while time.monotonic()<deadline and all(child.poll() is None for child in children):
+    try:
+        with socket.create_connection(('127.0.0.1',5900),timeout=.5) as display:
+            banner=b''
+            while len(banner)<12:
+                chunk=display.recv(12-len(banner))
+                if not chunk:break
+                banner+=chunk
+            if banner.startswith(b'RFB 003.') and (root/'vnc.sock').is_socket():
+                ready=True
+                break
+    except OSError:
+        pass
+    time.sleep(.1)
+if not ready:
+    (root / 'state.json').write_text('{"state":"failed","error":"display_start_failed"}')
     stop()
 (root / 'state.json').write_text('{"state":"ready"}')
 while browser.poll() is None and all(child.poll() is None for child in children):
