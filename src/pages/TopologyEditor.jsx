@@ -47,7 +47,7 @@ export function TopologyEditor() {
     let active = true
     const refresh = async () => {
       try {
-        const value = await p.client.platform('management')
+        const value = await p.client.platform('monitoring/enrollment')
         if (active) {
           setManagement(value)
           setManagementError(null)
