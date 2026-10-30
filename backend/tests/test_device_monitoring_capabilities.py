@@ -56,6 +56,36 @@ class DeviceMonitoringCapabilityTests(unittest.TestCase):
 
 
 class SnmpReadOnlyTests(unittest.IsolatedAsyncioTestCase):
+    def setUp(self):
+        class Value:
+            def __init__(self,value):self.value=value
+            def prettyPrint(self):return str(self.value)
+        async def walk(*args,**kwargs):
+            yield None,0,0,[(Value(snmp.IF_OIDS['name']+'.1'),Value('ether1'))]
+        self.walk_patch=patch('pysnmp.hlapi.v3arch.asyncio.walk_cmd',new=walk)
+        self.walk_patch.start();self.addCleanup(self.walk_patch.stop)
+
+    async def test_sparse_interface_indices_are_discovered_and_snmp_exception_values_are_omitted(self):
+        from pysnmp.proto.rfc1905 import NoSuchInstance,NoSuchObject,EndOfMibView
+        class Value:
+            def __init__(self,value):self.value=value
+            def prettyPrint(self):return str(self.value)
+        async def walk(*args,**kwargs):
+            for index,name in ((7,'ether7'),(42,'vlan30-client')):
+                yield None,0,0,[(Value(snmp.IF_OIDS['name']+'.'+str(index)),Value(name))]
+        calls=0
+        async def get(*args,**kwargs):
+            nonlocal calls
+            calls+=1
+            values=['RouterOS','1.3.6.1.4.1.14988','10000','router','2'] if calls==1 else ['ether7','1','1000','100','200','vlan30-client','1','1000','300','400']
+            return None,0,0,[(None,Value(v)) for v in values]
+        with patch('pysnmp.hlapi.v3arch.asyncio.walk_cmd',new=walk),patch('pysnmp.hlapi.v3arch.asyncio.get_cmd',new=get),patch('pysnmp.hlapi.v3arch.asyncio.UdpTransportTarget.create',new=AsyncMock(return_value=object())):
+            value=await snmp.probe('test','192.0.2.1',161,{'version':'v2c','community':'fixture-only'},['bandwidth'])
+        self.assertEqual([r['index'] for r in value['interfaces']],[7,42])
+        self.assertEqual(value['interfaces'][1]['name'],'vlan30-client')
+        self.assertFalse(value['scan_truncated'])
+        for missing in (NoSuchInstance(''),NoSuchObject(''),EndOfMibView('')):self.assertIsNone(snmp._value((None,missing)))
+
     async def test_snmpv2c_reads_system_and_bounded_if_mib_and_reports_rates_only_when_observed(self):
         class Value:
             def __init__(self,value):self.value=value
