@@ -28,7 +28,7 @@ class Monitoring:
         self.device_backups = DeviceConfigBackups(self.platform, self)
         self.cache, self.locks, self.metrics = {}, {}, Counter()
         self.semaphore = asyncio.Semaphore(3)
-        self.extra_targets=['wireguard','cisco_sf200','mikrotik_routes','network_traffic'] if settings.continuous_enabled else []
+        self.extra_targets=['wireguard','cisco_sf200','mikrotik_routes','mikrotik_neighbors','network_traffic'] if settings.continuous_enabled else []
 
     def capabilities(self):
         return {'configured_inventory':[{'id':d['id'],'name':d['name'],'host':d['host'],'enabled':d['enabled'],'method':d.get('monitor_method',''),'collector':self.platform.inventory_target(d)} for d in self.platform.list('inventory')],'service_integrations':[{'id':r['id'],'name':r['name'],'collector':r['collector'],'scheduled_http':r['monitor_enabled'],'enabled':r['enabled']} for r in self.platform.list('integrations')], 'continuous_monitoring':{'configured':self.settings.continuous_enabled,'interface_interval_seconds':self.settings.network_interval,
@@ -117,8 +117,8 @@ class Monitoring:
         if target=='network_traffic' and self.settings.continuous_enabled:
             history=self.database.history(target,1)
             return history[0] if history and time.time()-self.database.db.execute('SELECT ts FROM checks WHERE target=? ORDER BY id DESC LIMIT 1',(target,)).fetchone()[0]<120 else result(target,'delta counter',error='waiting_for_samples')
-        if target.startswith('mikrotik_') and target.split('_',1)[1] in {'system','interfaces','network','vlan'}:
-            value = await self.router.collect(target.split('_',1)[1])
+        if target.startswith('mikrotik_') and target.split('_',1)[1] in {'system','interfaces','network','vlan','neighbors'}:
+            value = await self.router.collect(target.split('_',1)[1], **({'fresh':True} if target=='mikrotik_neighbors' else {}))
             value['target'] = target
             return value
         if target == 'proxmox_resources':

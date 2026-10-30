@@ -117,7 +117,7 @@ class Platform:
         return next((r for r in self.list(collection) if r['id']==identity),None)
 
     def targets(self):
-        return set(self.config.targets if self.config else ())|{'mikrotik_system','mikrotik_interfaces','mikrotik_network','mikrotik_vlan','mikrotik_routes','wireguard','cisco_sf200','network_traffic','debian','docker','proxmox_resources'}|{'service_'+s['id'] for s in self.list('integrations')}|{'inventory_'+s['id'] for s in self.list('inventory')}
+        return set(self.config.targets if self.config else ())|{'mikrotik_system','mikrotik_interfaces','mikrotik_network','mikrotik_vlan','mikrotik_routes','mikrotik_neighbors','wireguard','cisco_sf200','network_traffic','debian','docker','proxmox_resources'}|{'service_'+s['id'] for s in self.list('integrations')}|{'inventory_'+s['id'] for s in self.list('inventory')}
 
     def inventory_target(self,item):
         from app.monitoring.inventory import binding

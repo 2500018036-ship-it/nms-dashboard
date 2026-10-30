@@ -14,7 +14,7 @@ def _has(value):
 def detect(sample):
     if not isinstance(sample,dict):return []
     found=set();data=sample.get('data') if isinstance(sample.get('data'),dict) else {}
-    interfaces=sample.get('interfaces') if isinstance(sample.get('interfaces'),list) else data.get('/interface',[])
+    interfaces=sample.get('interfaces') if isinstance(sample.get('interfaces'),list) and sample['interfaces'] else data.get('/interface',[])
     resource=(data.get('/system/resource') or [{}])[0] if isinstance(data.get('/system/resource'),list) and data.get('/system/resource') else {}
     if sample.get('status') in {'UP','DOWN','DEGRADED'}:found.add('network_status')
     if isinstance(sample.get('latency_ms'),(float,int)):found.add('latency')
@@ -66,7 +66,7 @@ def telemetry(sample):
     if isinstance(identity,list) and identity and isinstance(identity[0],dict):out.setdefault('system_info',{})['name']=str(identity[0].get('name',''))[:128]
     if isinstance(resource,list) and resource and isinstance(resource[0],dict):out['system_info']={**out.get('system_info',{}),**{k:str(resource[0][k])[:80] for k in ('version','board-name','architecture-name','uptime','cpu-load','total-memory','free-memory','total-hdd-space','free-hdd-space') if resource[0].get(k) is not None}}
     if isinstance(board,list) and board and isinstance(board[0],dict):out.setdefault('system_info',{}).update({k:str(board[0][k])[:80] for k in ('model','routerboard') if board[0].get(k) is not None})
-    interfaces=sample.get('interfaces') if isinstance(sample.get('interfaces'),list) else data.get('/interface',[])
+    interfaces=sample.get('interfaces') if isinstance(sample.get('interfaces'),list) and sample['interfaces'] else data.get('/interface',[])
     if isinstance(interfaces,list):
         rows=[]
         for row in interfaces[:32]:
