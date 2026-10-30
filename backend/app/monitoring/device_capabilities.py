@@ -35,7 +35,7 @@ def detect(sample):
     if _has(data.get('/system/health')) or _has(sample.get('temperature')):found.add('temperature')
     if _has(sample.get('sensors')):found.add('sensors')
     if _has(sample.get('nodes')) or _has(sample.get('guests')) or _has(sample.get('storage')):found.add('virtualization')
-    if _has(sample.get('http_status')) or _has(sample.get('query')):found.add('service_health')
+    if _has(sample.get('http_status')) or _has(sample.get('query')) or _has(sample.get('containers')):found.add('service_health')
     return [key for key in CATEGORIES if key in found]
 
 
@@ -69,18 +69,18 @@ def telemetry(sample):
     interfaces=sample.get('interfaces') if isinstance(sample.get('interfaces'),list) and sample['interfaces'] else data.get('/interface',[])
     if isinstance(interfaces,list):
         rows=[]
-        for row in interfaces[:32]:
+        for row in interfaces[:200]:
             if not isinstance(row,dict):continue
             item={}
-            for key in ('index','name','status','running','disabled','rx_bps','tx_bps','rx_bits_per_second','tx_bits_per_second','capacity_bps','sample_seconds','rx_bytes','tx_bytes','rx-byte','tx-byte','rx-error','tx-error','rx-drop','tx-drop'):
+            for key in ('index','name','type','mtu','status','running','disabled','rx_bps','tx_bps','rx_bits_per_second','tx_bits_per_second','capacity_bps','utilization_percent','duplex','sample_seconds','rx_bytes','tx_bytes','rx-byte','tx-byte','rx_errors','tx_errors','rx_drops','tx_drops','rx-error','tx-error','rx-drop','tx-drop'):
                 value=row.get(key)
                 if value is None or type(value) in (bool,int,float) or isinstance(value,str):item[key]=value
             if item:rows.append(item)
         if rows:out['interfaces']=rows
     for key,source,keys in (
-        ('nodes','nodes',('node','status','cpu','mem','maxmem','uptime')),
-        ('guests','guests',('vmid','name','node','type','status','cpu','mem','uptime')),
-        ('storage','storage',('node','storage','status','disk','maxdisk')),
+        ('nodes','nodes',('id','node','status','cpu','maxcpu','mem','maxmem','disk','maxdisk','uptime')),
+        ('guests','guests',('id','vmid','name','node','type','status','cpu','maxcpu','mem','maxmem','disk','maxdisk','uptime','netin','netout','diskread','diskwrite')),
+        ('storage','storage',('id','node','storage','status','disk','maxdisk')),
         ('disks','disks',('path','used_percent','total','used','free')),
         ('vlans','vlans',('name','vlan-id','interface','disabled')),
         ('routes','routes',('dst-address','gateway','active','distance','routing-table')),
@@ -88,7 +88,7 @@ def telemetry(sample):
         values=sample.get(source)
         if source=='vlans' and values is None:values=data.get('/interface/vlan')
         if source=='routes' and values is None:values=data.get('/ip/route')
-        if isinstance(values,list):out[key]=[{k:(str(row[k])[:128] if isinstance(row[k],str) else row[k]) for k in keys if k in row and (row[k] is None or type(row[k]) in (bool,int,float) or isinstance(row[k],str))} for row in values[:32] if isinstance(row,dict)]
+        if isinstance(values,list):out[key]=[{k:(str(row[k])[:128] if isinstance(row[k],str) else row[k]) for k in keys if k in row and (row[k] is None or type(row[k]) in (bool,int,float) or isinstance(row[k],str))} for row in values[:200] if isinstance(row,dict)]
     if isinstance(out.get('nodes'),list) and out['nodes']:
         node=out['nodes'][0]
         try:
@@ -101,4 +101,19 @@ def telemetry(sample):
         for row in out['interfaces']:
             if row.get('rx_bps') is None and isinstance(row.get('rx_bits_per_second'),(int,float)):row['rx_bps']=row['rx_bits_per_second']
             if row.get('tx_bps') is None and isinstance(row.get('tx_bits_per_second'),(int,float)):row['tx_bps']=row['tx_bits_per_second']
+    for key,path,fields in (
+        ('neighbors','/ip/neighbor',('identity','address','interface','platform','version','discovered-by')),
+        ('wireless','/interface/wireless',('name','ssid','mode','band','frequency','running','disabled','signal-strength','noise-floor')),
+        ('sensors','/system/health',('name','value','temperature','voltage','current')),
+        ('peers',None,('name','interface','disabled','last-handshake','handshake_age_seconds','rx','tx')),
+        ('containers',None,('name','state','health','image','restart_count','cpu_percent','memory_bytes','memory_limit_bytes','expected_running')),
+        ('tasks',None,('node','type','status','starttime','endtime')),
+    ):
+        values=data.get(path,[]) if path else sample.get(key,[])
+        if isinstance(values,list) and values:out[key]=[{k:row[k] for k in fields if k in row} for row in values[:200] if isinstance(row,dict)]
+    try:
+        total=float(resource[0].get('total-hdd-space',0)) if isinstance(resource,list) and resource else 0
+        free=float(resource[0]['free-hdd-space']) if total>0 else 0
+        if total>0 and 0<=free<=total:out['disks']=[{'path':'RouterOS storage','total':total,'free':free,'used':total-free,'used_percent':round((total-free)*100/total,2)}]
+    except (ValueError,TypeError,KeyError):pass
     return out

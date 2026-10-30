@@ -61,7 +61,7 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
   const get = (path, signal) => request(path, signal)
   return {
     platform: (path = '', { body, params = {}, signal } = {}) => {
-      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|assistant-history|ask|topology-verify|monitoring\/routeros\/read|inventory\/import|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}(?:\/restore)?|\/runs\/run_[a-f0-9]{24}|\/compare)?|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
+      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|assistant-history|ask|topology-verify|monitoring\/(?:enrollment|routeros\/read)|inventory\/import|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}(?:\/restore)?|\/runs\/run_[a-f0-9]{24}|\/compare)?|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
       const allowed = path === 'report' ? ['target','from','to','resource'] : path === 'audit' ? ['page','q'] : path === 'application-logs' ? ['page','q','level','from','to'] : path === 'assistant-history' ? ['before'] : path === 'device-backups/compare' ? ['left','right'] : []
       if (!valid || Object.keys(params).some((key) => !allowed.includes(key))) return Promise.reject(new ApiError('target_not_allowed'))
       const query = new URLSearchParams(params)
@@ -103,7 +103,7 @@ export const errorMessages = {
   unavailable: 'API belum dapat dijangkau', timeout: 'Waktu tunggu API habis',
   invalid_response: 'Format respons API belum sesuai', response_too_large: 'Respons API melewati batas aman',
   invalid_credentials: 'Username atau password tidak sesuai.',
-  target_not_allowed: 'Target riwayat tidak diizinkan', cancelled: 'Permintaan dibatalkan',
+  target_not_allowed: 'Target atau jalur permintaan tidak diizinkan.', cancelled: 'Permintaan dibatalkan',
   invalid_filter: 'Filter waktu tidak valid. Gunakan waktu WIB, urutan awal–akhir yang benar, dan rentang log maksimum 31 hari.',
   ai_unavailable: 'Provider AI belum dapat menyelesaikan jawaban. Monitoring dan notifikasi tetap berjalan.',
   permission_denied: 'Role akun ini tidak mengizinkan tindakan tersebut.',

@@ -290,42 +290,44 @@ class PlatformAPI:
         return {'id':identity,'state':'running'}
 
     def inventory_status(self,item):
-        from app.monitoring.device_capabilities import detect,telemetry
+        from app.dashboard.device_summary import summarize
+        from app.dashboard.projection import check
         target=self.store.inventory_target(item)
-        value={'id':item['id'],'name':item['name'],'host':item['host'],'monitor_target':target,'enabled':item['enabled'],
-            'integration_state':'NOT_CONFIGURED' if not target else 'WAITING_FOR_SAMPLE','health':None,
-            'supported_categories':[],'enabled_categories':[],'telemetry':{}}
-        if target and item['enabled']:
+        targets=[target] if target else []
+        source=self.store.source(identity=item['id'])
+        if source and source[0]==item['host']:
+            import os
+            from urllib.parse import urlsplit
+            for key in json.loads(source[3]):
+                spec=self.owner.settings.targets.get(key,{})
+                host=spec.get('host') or urlsplit(spec.get('url','')).hostname
+                if key.startswith('mikrotik_') or key in {'wireguard','network_traffic'}:host=os.getenv('MIKROTIK_HOST','192.168.20.1')
+                elif key=='proxmox_resources':host=os.getenv('PROXMOX_HOST','192.168.20.200')
+                elif key in {'debian','docker'}:host=self.owner.settings.targets.get('debian_ssh',{}).get('host')
+                if host==item['host']:targets.append(key)
+        targets=list(dict.fromkeys(targets))
+        samples={}
+        if targets and item['enabled']:
             with closing(sqlite3.connect(self.store.path.parent/'nms.sqlite3',timeout=3)) as db:
-                row=db.execute('SELECT ts,payload FROM checks WHERE target=? ORDER BY id DESC LIMIT 1',(target,)).fetchone()
-            if row:
-                from app.dashboard.projection import check
-                clean=check(json.loads(row[1]),row[0],time.time(),item['interval'])
-                if clean.get('host') and clean['host']!=item['host']:
-                    value['health']=None;value['integration_state']='WAITING_FOR_SAMPLE'
-                else:
-                    value['health']={k:clean.get(k) for k in ('status','error','sample_epoch','stale','method')}
-                    value['supported_categories']=detect(clean)
-                    value['enabled_categories']=[category for category in item.get('monitor_categories',[]) if category in value['supported_categories']]
-                    value['telemetry']=telemetry({**clean,'sample_epoch':clean.get('sample_epoch')})
-                    value['integration_state']='CONNECTED' if clean['status']=='UP' else 'STALE' if clean.get('stale') else 'UNREACHABLE' if clean['status']=='DOWN' else 'COLLECTION_FAILED' if clean.get('error') else 'UNKNOWN'
-        if not item['enabled']:value['integration_state']='DISABLED'
-        return value
+                by_target={}
+                for key in targets:
+                    row=db.execute('SELECT ts,payload FROM checks WHERE target=? ORDER BY id DESC LIMIT 1',(key,)).fetchone()
+                    if row:by_target[key]=row
+            for key in targets:
+                if key in by_target:
+                    ts,payload=by_target[key]
+                    samples[key]=check(json.loads(payload),ts,time.time(),item['interval'] if key==target else self.owner.settings.poll_interval)
+        return summarize(item,target,samples)
 
     def validate_monitor_categories(self,value,identity=None):
         if not isinstance(value,dict) or 'monitor_categories' not in value or not identity:return
         existing=self.store.get('inventory',identity)
         if not existing:return
+        if value.get('monitor_method')!=existing.get('monitor_method') or value.get('host')!=existing['host']:return
         if value.get('monitor_categories')==existing.get('monitor_categories'):return
-        target=self.store.inventory_target(existing)
-        if not target:return
-        with closing(sqlite3.connect(self.store.path.parent/'nms.sqlite3',timeout=3)) as db:
-            row=db.execute('SELECT ts,payload FROM checks WHERE target=? ORDER BY id DESC LIMIT 1',(target,)).fetchone()
-        if not row:return
-        from app.dashboard.projection import check
-        from app.monitoring.device_capabilities import detect
-        sample=check(json.loads(row[1]),row[0],time.time(),existing['interval'])
-        available=set(detect(sample))
+        state=self.inventory_status(existing)
+        if not state['collectors']:return
+        available=set(state['supported_categories'])
         if any(category not in available for category in value['monitor_categories']):raise ValueError('unsupported_monitor_category')
 
     def test_inventory(self,identity,body,session):

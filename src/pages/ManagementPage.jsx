@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { Link, useSearchParams } from 'react-router'
 import { usePlatform } from '../data/platformContext'
 import { Badge, EmptyState, Panel, formatTime, Icon } from '../components/ui'
@@ -8,6 +8,8 @@ import { CredentialEditor } from '../components/CredentialEditor'
 import { inventoryValue } from '../devices/serverInventory'
 import { newDevice, deviceTypes, validatedDevice } from '../devices/model'
 import { RouterOSReadPanel } from './RouterOSReadPanel'
+import {SnmpCredentialsForm} from '../components/SnmpCredentialsForm'
+import {emptySnmp,snmpErrors,saveSnmpCredentials} from '../devices/snmpEnrollment'
 
 const steps=['Identitas','Metode monitoring','Akses & kredensial','Uji koneksi']
 const monitoringMethods=[
@@ -24,7 +26,7 @@ const monitoringMethods=[
 
 function IntegrationGuide({device}){
   const method=device.monitor_method;const vendor=(device.vendor||'').toLowerCase();const osLike=/linux|debian|ubuntu|windows|microsoft/.test(vendor+' '+(device.model||''))
-  if(method==='snmp')return <div className="alert alert-info small mt-3"><strong>Langkah SNMP untuk {device.vendor||device.type} {device.model||''}.</strong><ol className="mb-2 mt-2 ps-3"><li>Aktifkan SNMP pada GUI perangkat dan buat akun/community monitoring <strong>baca-saja</strong>. Utamakan SNMPv3 authPriv SHA/AES. v2c hanya dengan community unik.</li><li>Izinkan hanya alamat poller NMS menuju perangkat melalui <strong>UDP 161</strong>; pastikan perangkat membalas ke alamat poller yang sama. Jangan meneruskan UDP 161 dari internet.</li><li>Simpan perangkat dahulu. Buka vault kredensial di langkah uji, isi versi SNMP dan rahasia yang sama persis seperti di perangkat, lalu simpan terenkripsi.</li><li>Tekan <em>Uji koneksi</em>. Hasil harus menunjukkan UP dan identitas SNMP asli. Interface/trafik hanya muncul jika perangkat mengembalikan IF-MIB; bandwidth baru ada sesudah dua polling.</li></ol>{/mikrotik|routeros/.test(vendor+' '+device.model)?<p className="mb-1">RouterOS: buka <strong>IP → SNMP</strong>, aktifkan SNMP, buat community v2c terbatas ke IP poller atau pengguna SNMPv3 read-only dengan authPriv. Jangan mengubah firewall/router dari wizard ini.</p>:/cisco/.test(vendor)?<p className="mb-1">Cisco Small Business: aktifkan SNMP di halaman administrasi/management sesuai versi firmware, buat view/group read-only dan batasi host manager ke IP poller. Menu SF200 berbeda antarfirmware.</p>:/tp.?link|tplink/.test(vendor)?<p className="mb-1">TP-Link: cari menu SNMP pada System Tools/Management sesuai model/firmware; aktifkan GET/read-only, set manager IP poller dan port 161. Beberapa model rumahan tidak menyediakan SNMP.</p>:osLike?<p className="mb-1">Linux/Windows: pastikan agen SNMP tersedia pada edisi/OS tersebut, bind ke interface manajemen, dan batasi akses inbound UDP 161 ke IP poller. NMS tidak memasang agen jarak jauh.</p>:<p className="mb-1">Pastikan model dan firmware benar-benar mendukung SNMP agent dan IF-MIB. Dukungan CPU, memori, suhu, VLAN atau routing vendor-specific belum diasumsikan bila OID-nya tidak dikembalikan.</p>}<span>Gagal: periksa agent aktif, versi/auth/privacy sama, ACL manager, UDP 161 dan rute pulang. Timeout tidak membuktikan perangkat mati.</span></div>
+  if(method==='snmp')return <div className="alert alert-info small mt-3"><strong>Langkah SNMP untuk {device.vendor||device.type} {device.model||''}.</strong><ol className="mb-2 mt-2 ps-3"><li>Aktifkan SNMP pada GUI perangkat dan buat akun/community monitoring <strong>baca-saja</strong>. Utamakan SNMPv3 authPriv SHA/AES. v2c hanya dengan community unik.</li><li>Izinkan hanya alamat poller NMS menuju perangkat melalui <strong>UDP 161</strong>; pastikan perangkat membalas ke alamat poller yang sama. Jangan meneruskan UDP 161 dari internet.</li><li>Di langkah Akses & kredensial, isi versi SNMP, nama pengguna/community dan rahasia yang sama persis seperti di perangkat. Simpan & uji akan menyimpannya terenkripsi.</li><li>Tekan <em>Uji koneksi</em>. Hasil harus menunjukkan UP dan identitas SNMP asli. Interface/trafik hanya muncul jika perangkat mengembalikan IF-MIB; bandwidth baru ada sesudah dua polling.</li></ol>{/mikrotik|routeros/.test(vendor+' '+device.model)?<p className="mb-1">RouterOS: buka <strong>IP → SNMP</strong>, aktifkan SNMP, buat community v2c terbatas ke IP poller atau pengguna SNMPv3 read-only dengan authPriv. Jangan mengubah firewall/router dari wizard ini.</p>:/cisco/.test(vendor)?<p className="mb-1">Cisco Small Business: aktifkan SNMP di halaman administrasi/management sesuai versi firmware, buat view/group read-only dan batasi host manager ke IP poller. Menu SF200 berbeda antarfirmware.</p>:/tp.?link|tplink/.test(vendor)?<p className="mb-1">TP-Link: cari menu SNMP pada System Tools/Management sesuai model/firmware; aktifkan GET/read-only, set manager IP poller dan port 161. Beberapa model rumahan tidak menyediakan SNMP.</p>:osLike?<p className="mb-1">Linux/Windows: pastikan agen SNMP tersedia pada edisi/OS tersebut, bind ke interface manajemen, dan batasi akses inbound UDP 161 ke IP poller. NMS tidak memasang agen jarak jauh.</p>:<p className="mb-1">Pastikan model dan firmware benar-benar mendukung SNMP agent dan IF-MIB. Dukungan CPU, memori, suhu, VLAN atau routing vendor-specific belum diasumsikan bila OID-nya tidak dikembalikan.</p>}<span>Gagal: periksa agent aktif, versi/auth/privacy sama, ACL manager, UDP 161 dan rute pulang. Timeout tidak membuktikan perangkat mati.</span></div>
   if(method==='icmp')return <div className="alert alert-info small mt-3"><strong>Panduan ICMP.</strong> Tidak memerlukan akun atau port TCP/UDP. Pastikan IP manajemen benar, server NMS dapat merutekan paket ke perangkat, dan firewall perangkat mengizinkan ICMP echo dari server NMS. Data yang tersedia hanya status dan latensi jika balasan terukur; tidak ada CPU/interface/trafik.</div>
   if(method==='routeros')return <div className="alert alert-info small mt-3"><strong>RouterOS API.</strong> Adapter NMS memakai profil API baca-saja yang disiapkan di server untuk host {device.host}. Pada MikroTik, aktifkan API-SSL TCP 8729, buat grup read-only dan akun khusus yang hanya perlu `read` + `api`, lalu batasi service/API ke alamat poller. Pilih profil RouterOS yang host-nya cocok. Jangan masukkan kata sandi ke form pendaftaran.</div>
   if(method==='proxmox')return <div className="alert alert-info small mt-3"><strong>Proxmox API.</strong> Endpoint HTTPS TCP 8006. Adapter hanya memakai token yang sudah disiapkan di server, memverifikasi TLS, dan membutuhkan hak audit baca-saja untuk system/node, VM, serta storage. Buat token terpisah di Proxmox dengan privilege audit minimum lalu siapkan CA tepercaya di server; host harus sama dengan profil API.</div>
@@ -40,6 +42,24 @@ export function DeviceRegistration({item,inventory=[],enrollment,onClose,onSaved
   const [f,setF]=useState(()=>({...newDevice(),location:'',role:'',hostname:'',credential_ref:'',monitor_method:'icmp',monitor_port:443,monitor_url:'',dns_query:'example.com',mac_address:'',follow_dhcp:false,...(item?inventoryValue(item):{} )}))
   const [error,setError]=useState(null);const [busy,setBusy]=useState(false);const [fieldErrors,setFieldErrors]=useState({});const [savedDeviceId,setSavedDeviceId]=useState(item?.id||'');const [testResult,setTestResult]=useState(null)
   const [authorize,setAuthorize]=useState(true)
+  const [savedRecord,setSavedRecord]=useState(item||null)
+  const [snmp,setSnmp]=useState(emptySnmp)
+  const [snmpLoaded,setSnmpLoaded]=useState(!item)
+  const [snmpLoading,setSnmpLoading]=useState(false)
+  const [snmpLoadError,setSnmpLoadError]=useState(null)
+  const [snmpValidation,setSnmpValidation]=useState({})
+  const saving=useRef(false)
+  useEffect(()=>{
+    if(f.monitor_method!=='snmp'||!item?.id||snmpLoaded||!p.canReadCredentials||step<2)return
+    const controller=new AbortController()
+    const start=setTimeout(()=>{
+      setSnmpLoading(true)
+      p.client.credentials('inventory',item.id,{signal:controller.signal}).then((value)=>{
+        if(!controller.signal.aborted){setSnmp(value.credentials.snmp?.version?value.credentials.snmp:emptySnmp());setSnmpLoading(false);setSnmpLoaded(true);setSnmpLoadError(null)}
+      }).catch((e)=>{if(!controller.signal.aborted)setSnmpLoadError(e.code||'unavailable')}).finally(()=>{if(!controller.signal.aborted)setSnmpLoading(false)})
+    },0)
+    return()=>{clearTimeout(start);controller.abort()}
+  },[f.monitor_method,item?.id,p.client,p.canReadCredentials,snmpLoaded,step])
   const needsAuthorization=Boolean(f.monitor_method&&!p.settings?.value?.allowed_hosts?.includes(f.host.trim().toLowerCase()))
   const canAuthorize=p.capabilities.permissions?.includes('config.manage')
   const set=(k,v)=>{setF((old)=>({...old,[k]:v}));setTestResult(null)}
@@ -51,7 +71,7 @@ export function DeviceRegistration({item,inventory=[],enrollment,onClose,onSaved
       credential_ref:method==='routeros'?'routeros-default':method==='proxmox'?'proxmox-default':'',monitor_url:'',monitor_port:method==='dns'?53:method==='snmp'?161:method==='ssh'?22:443}))
     setTestResult(null)
   }
-  const normalized=()=>validatedDevice(f,inventory,item?.id)
+  const normalized=()=>validatedDevice(f,inventory,savedRecord?.id||item?.id)
   const validateStep=(target)=>{
     try{const value=normalized();setFieldErrors({});return value}catch(e){
       const relevant=target===0?['name','host','type']:target===1?['monitor_method','methods','profile','interval']:target===2?['host','credential_ref','monitor_url','monitor_port','dns_query','mac_address']:['form']
@@ -67,29 +87,39 @@ export function DeviceRegistration({item,inventory=[],enrollment,onClose,onSaved
     finally{setBusy(false)}
   }
   const saveAndTest=async()=>{
-    if(busy)return
+    if(busy||saving.current)return
     const value=validateStep(3);if(!value)return
+    if(f.monitor_method==='snmp') {
+      const errors=snmpErrors(snmp);setSnmpValidation(errors)
+      if(Object.keys(errors).length||!snmpLoaded||snmpLoading||snmpLoadError){setStep(2);return}
+      if(!p.canManageCredentials){setError('permission_denied');return}
+    }
     if(needsAuthorization&&(!authorize||!canAuthorize)){setError('host_not_allowed');return}
+    saving.current=true
     setBusy(true);setError(null);setTestResult(null)
     try{
-      const saved=await p.mutate(`inventory${item?'/'+item.id:''}`,{value:inventoryValue(value),...(needsAuthorization&&authorize&&canAuthorize?{authorize_host:true}:{}),...(item?{revision:item.revision}:{})})
-      const identity=saved?.item?.id||saved?.id||item?.id
+      if(savedRecord?.id&&f.monitor_method==='snmp')await saveSnmpCredentials(p.client,savedRecord.id,snmp)
+      const saved=await p.mutate(`inventory${savedRecord?'/'+savedRecord.id:''}`,{value:inventoryValue(value),...(needsAuthorization&&authorize&&canAuthorize?{authorize_host:true}:{}),...(savedRecord?{revision:savedRecord.revision}:{})})
+      const record=saved?.item||saved
+      const identity=record?.id||savedRecord?.id
       if(!identity)throw Object.assign(new Error(),{code:'invalid_response'})
+      setSavedRecord(record)
       setSavedDeviceId(identity);setStep(3)
+      if(!savedRecord&&f.monitor_method==='snmp')await saveSnmpCredentials(p.client,identity,snmp)
       try{const result=await p.client.platform(`inventory/${identity}/test`,{body:{}});setTestResult(result)}catch(e){setError(e.code||'unavailable')}
       onSaved?.()
     }catch(e){setError(e.code||'validation_failed');setFieldErrors(e.errors||{})}
-    finally{setBusy(false)}
+    finally{setBusy(false);saving.current=false}
   }
-  const next=()=>{if(validateStep(step))setStep((v)=>Math.min(3,v+1))}
+  const next=()=>{if(step===2&&f.monitor_method==='snmp'){const errors=snmpErrors(snmp);setSnmpValidation(errors);if(Object.keys(errors).length||!snmpLoaded||snmpLoading||snmpLoadError)return}if(validateStep(step))setStep((v)=>Math.min(3,v+1))}
   const field=(key,label,type='text',required=false)=><div className="col-md-6"><label className="form-label" htmlFor={'register-'+key}>{label}</label><input className={`form-control ${fieldErrors[key]?'is-invalid':''}`} id={'register-'+key} type={type} required={required} value={f[key]??''} maxLength={key==='monitor_url'?500:253} min={key==='interval'?15:1} max={key==='interval'?86400:65535} onChange={(e)=>set(key,type==='number'?Number(e.target.value):e.target.value)}/>{fieldErrors[key]&&<div className="invalid-feedback">{fieldErrors[key]}</div>}</div>
   const methodReady=!['routeros','proxmox'].includes(f.monitor_method)||(profile?.configured&&profile.host===f.host.trim())
   return <Modal title={item?'Perbarui perangkat':'Wizard penambahan perangkat'} onClose={busy?()=>{}:onClose} footer={<>
     <button type="button" className="btn btn-secondary" disabled={busy} onClick={onClose}>Tutup</button>
-    {step>0&&step<3&&<button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={()=>setStep((v)=>v-1)}>Kembali</button>}
+    {step>0&&<button type="button" className="btn btn-outline-secondary" disabled={busy} onClick={()=>setStep((v)=>v-1)}>Kembali</button>}
     {step<3&&<button type="button" className="btn btn-primary" disabled={busy} onClick={next}>Lanjut</button>}
-    {step===3&&!savedDeviceId&&<button type="button" className="btn btn-primary" disabled={busy} onClick={saveAndTest}>{busy?'Menyimpan & menguji…':'Simpan & uji koneksi'}</button>}
-    {step===3&&savedDeviceId&&<button type="button" className="btn btn-outline-primary" disabled={busy} onClick={()=>testDevice(savedDeviceId)}>{busy?'Menguji…':'Uji lagi'}</button>}
+    {step===3&&<button type="button" className="btn btn-primary" disabled={busy} onClick={saveAndTest}>{busy?'Menyimpan & menguji…':'Simpan & uji koneksi'}</button>}
+    {step===3&&savedDeviceId&&<button type="button" className="btn btn-outline-primary" disabled={busy} onClick={()=>testDevice(savedDeviceId)}>{busy?'Menguji…':'Uji data tersimpan'}</button>}
   </>}>
     <ol className="nms-device-wizard-steps" aria-label="Langkah pendaftaran">{steps.map((label,index)=><li key={label} className={index===step?'active':index<step?'complete':''} aria-current={index===step?'step':undefined}><span>{index+1}</span>{label}</li>)}</ol>
     <Feedback error={error}/>
@@ -108,11 +138,11 @@ export function DeviceRegistration({item,inventory=[],enrollment,onClose,onSaved
     {step===2&&<section aria-labelledby="wizard-access"><h3 id="wizard-access" className="h6">Akses, protokol, dan kredensial</h3><dl className="row small mb-3"><dt className="col-sm-4">Protokol</dt><dd className="col-sm-8">{monitoringMethods.find((m)=>m.id===f.monitor_method)?.label||'Inventaris saja'}</dd><dt className="col-sm-4">Port / endpoint</dt><dd className="col-sm-8">{f.monitor_method==='icmp'?'ICMP echo':f.monitor_method==='dns'?`UDP/TCP ${f.monitor_port}`:['tcp','ssh'].includes(f.monitor_method)?`TCP ${f.monitor_port}`:f.monitor_method==='snmp'?`UDP ${f.monitor_port}`:f.monitor_method==='http'?f.monitor_url||'URL belum diisi':profile?.configured?profile.host:'Belum dikonfigurasi'}</dd></dl>
       {f.monitor_method==='routeros'&&<div className="alert alert-info small">Gunakan API-SSL pada RouterOS. Akun monitoring di server harus read-only dan hanya mengizinkan read + api. NMS menolak kredensial dengan izin berlebih.</div>}
       {f.monitor_method==='proxmox'&&<div className="alert alert-info small">Gunakan token API Proxmox baca-saja dan CA TLS tepercaya. Token dikelola di server, bukan dimasukkan ke form ini.</div>}
-      {f.monitor_method==='snmp'&&<div className="alert alert-warning small">Daftarkan perangkat dahulu. Setelah tersimpan, isi SNMPv3 authPriv (disarankan) atau community v2c unik di vault terenkripsi di langkah uji, kemudian pilih <em>Uji lagi</em>. Poller mencoba UDP 161 dan mengambil system identity serta IF-MIB baca-saja.</div>}
+      {f.monitor_method==='snmp'&&<><p className="small">Isi koneksi SNMP langsung di bawah. Pada MikroTik: aktifkan SNMP, gunakan read-only, security private untuk v3, serta Addresses 192.168.20.195/32.</p><div className="row g-3 mb-3">{field('monitor_port','Port SNMP UDP','number',true)}</div>{snmpLoading&&<p role="status">Memuat kredensial SNMP tersimpan…</p>}{snmpLoadError&&<Feedback error={snmpLoadError}/>}<SnmpCredentialsForm value={snmp} onChange={(value)=>{setSnmp(value);setSnmpValidation({});setTestResult(null)}} disabled={!p.canManageCredentials||snmpLoading||!snmpLoaded||Boolean(snmpLoadError)} errors={snmpValidation}/>{!p.canManageCredentials&&<div className="alert alert-warning">Diperlukan izin pengelolaan kredensial untuk menyimpan koneksi SNMP.</div>}</>}
       {f.monitor_method==='ssh'&&<div className="alert alert-warning small">Daftarkan perangkat dahulu. Di vault, isi akun Linux non-root, kata sandi, jenis host key dan Base64 key yang fingerprint-nya diverifikasi dari console. Simpan vault, lalu pilih <em>Uji koneksi</em>. Kredensial SSH disimpan terenkripsi per perangkat.</div>}
       <div className="alert alert-secondary small">Kredensial GUI asli dan kredensial monitoring disimpan terenkripsi dan terpisah dari inventaris. Konfigurasi perangkat tetap dilakukan melalui GUI aslinya.</div>
-      {savedDeviceId&&<CredentialEditor targetType="inventory" targetId={savedDeviceId} title="Vault kredensial perangkat"/>}
-      {!savedDeviceId&&<p className="small text-muted">Simpan pendaftaran pada langkah terakhir terlebih dahulu; setelah tersimpan, vault kredensial GUI dapat dibuka dengan izin yang sesuai.</p>}
+      {savedDeviceId&&f.monitor_method!=='snmp'&&<CredentialEditor targetType="inventory" targetId={savedDeviceId} title="Vault kredensial perangkat"/>}
+      {!savedDeviceId&&f.monitor_method!=='snmp'&&<p className="small text-muted">Simpan pendaftaran pada langkah terakhir terlebih dahulu; setelah tersimpan, vault kredensial GUI dapat dibuka dengan izin yang sesuai.</p>}
       {needsAuthorization&&<div className="alert alert-warning"><label className="form-check mb-0"><input className="form-check-input" type="checkbox" checked={authorize} disabled={!canAuthorize} onChange={(e)=>setAuthorize(e.target.checked)}/><span className="form-check-label">Izinkan {f.host||'alamat ini'} pada allowlist monitoring saat menyimpan.</span></label>{!canAuthorize&&<small className="d-block mt-1">Minta Administrator mengizinkan alamat ini di Pengaturan Sistem.</small>}</div>}
     </section>}
     {step===3&&<section aria-labelledby="wizard-test"><h3 id="wizard-test" className="h6">Simpan dan uji dari server</h3><p className="small text-muted">NMS menguji metode yang dipilih dari server. Menyimpan inventaris tidak menandakan perangkat berhasil terhubung.</p><div className="border rounded p-3"><div><strong>{f.name||'Perangkat baru'}</strong><span className="text-muted"> · {f.host||'IP belum diisi'}</span></div><div className="small mt-1">{monitoringMethods.find((m)=>m.id===f.monitor_method)?.label||'Inventaris saja'} · setiap {f.interval} detik</div></div>
@@ -120,7 +150,7 @@ export function DeviceRegistration({item,inventory=[],enrollment,onClose,onSaved
       {!methodReady&&<div className="alert alert-warning mt-3">Profil API belum cocok dengan host target. Ubah ke ICMP/inventaris atau siapkan profil di server sebelum uji API.</div>}
       {testResult&&<div className={`alert ${testResult.status==='UP'?'alert-success':'alert-warning'} mt-3`} role="status"><strong>Hasil uji: {testResult.status||testResult.integration_state||'UNKNOWN'}</strong><div>{testResult.error||testResult.method||testResult.read_state||'Collector belum menyediakan data.'}</div><small>Hasil pada {formatTime(testResult.sample_epoch||testResult.timestamp)}. Status tetap mengikuti polling berikutnya.</small>{testResult.supported_categories?.length>0&&<div className="mt-2">Kemampuan terdeteksi dari sampel asli: {testResult.supported_categories.map((id)=>id.replaceAll('_',' ')).join(', ')}.</div>}</div>}
       {testResult?.status!=='UP'&&<details className="mt-3"><summary>Pemecahan masalah</summary><ul className="small mt-2"><li>Pastikan IP adalah alamat manajemen dan server NMS dapat mencapainya; periksa allowlist tujuan.</li><li>Periksa protokol, port/ACL, TLS dan kredensial baca-saja. Timeout dapat berarti paket diblokir atau respons tidak kembali.</li><li>Untuk RouterOS/Proxmox, pastikan IP cocok dengan profil API yang disiapkan di server.</li><li>SNMP: cocokkan versi serta auth/privacy, pastikan UDP 161 dan view baca-saja; hanya OID yang dibalas akan ditawarkan.</li><li>SSH Linux: periksa TCP, akun non-root, fingerprint/jenis/Base64 host key, dan hak baca. Host key yang berubah harus diverifikasi di console dan dimasukkan ulang.</li></ul></details>}
-      {savedDeviceId&&<CredentialEditor targetType="inventory" targetId={savedDeviceId} title="Vault kredensial perangkat"/>}
+      {savedDeviceId&&f.monitor_method!=='snmp'&&<CredentialEditor targetType="inventory" targetId={savedDeviceId} title="Vault kredensial perangkat"/>}
     </section>}
     <div className="small text-muted mt-3">Tidak ada perubahan konfigurasi atau pemindaian aktif pada perangkat. Collector hanya menjalankan metode yang dipilih dan diizinkan.</div>
   </Modal>
