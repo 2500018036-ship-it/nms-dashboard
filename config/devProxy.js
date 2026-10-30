@@ -13,7 +13,7 @@ export function isReadOnlyRequest(method, requestUrl, base) {
 }
 export function isGatewayRequest(method, requestUrl, base) {
   const path = new URL(requestUrl, 'http://localhost').pathname.slice(base.length)
-  return isReadOnlyRequest(method, requestUrl, base) || method === 'POST' && (['/api/auth/login', '/api/auth/logout'].includes(path) || credentialsPath.test(path) || /^\/api\/platform\/(?:settings|restore|users|ask|monitoring\/routeros\/read|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}\/restore)?|inventory\/import|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path))
+  return isReadOnlyRequest(method, requestUrl, base) || method === 'POST' && (['/api/auth/login', '/api/auth/logout'].includes(path) || credentialsPath.test(path) || /^\/api\/platform\/(?:settings|restore|users|ask|topology-verify|monitoring\/routeros\/read|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}\/restore)?|inventory\/import|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path))
 }
 export function sameOriginRequest(headers) {
   try { const origin = new URL(headers.origin); return ['http:', 'https:'].includes(origin.protocol) && origin.host === headers.host && headers['sec-fetch-site'] !== 'cross-site' }

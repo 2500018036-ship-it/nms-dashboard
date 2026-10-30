@@ -3,9 +3,11 @@ import { Link } from 'react-router'
 import { portObservation, connectedTopologyDevices, linkedLegacyServices } from '../data/topologyModel'
 import { usePlatform } from '../data/platformContext'
 import { useMonitoring } from '../data/useMonitoring'
-import { Badge, EmptyState, Panel } from '../components/ui'
+import { Badge, EmptyState, Panel, formatTime, percentage } from '../components/ui'
 import { Modal, Confirmation } from '../components/Modal'
-import { AccessNote, Feedback, Loading } from '../components/PlatformUI'
+import { AccessNote, Feedback, Loading, Launcher } from '../components/PlatformUI'
+import { topologySignature, verifiedLink } from '../data/topologyVerification'
+import { TopologyContextMenu } from '../components/TopologyContextMenu'
 
 import { useTopologyWorkspace } from '../data/topologyWorkspaceContext'
 import { networkIcons, iconURL } from '../data/networkIcons'
@@ -34,6 +36,13 @@ export function TopologyEditor() {
   const [error, setError] = useState(null)
   const [message, setMessage] = useState('')
   const [importError, setImportError] = useState('')
+  const [verification,setVerification]=useState(null)
+  const [verifying,setVerifying]=useState(false)
+  const [context,setContext]=useState(null)
+  const [clock,setClock]=useState(()=>Date.now()/1000)
+  const verificationFlight=useRef(false)
+  const display=doc?.display||{}
+  useEffect(()=>{const timer=setInterval(()=>setClock(Date.now()/1000),1000);return()=>clearInterval(timer)},[])
   useEffect(() => {
     let active = true
     const refresh = async () => {
@@ -63,16 +72,29 @@ export function TopologyEditor() {
   const connectedDevices = connectedTopologyDevices({ inventory: p.inventory, inventoryStates, observedDevices, now: p.now })
   const visibleGraph = { nodes: graph?.nodes || [], links: graph?.links || [] }
   const selectedNode = visibleGraph.nodes.find((node) => node.id === nodeId)
+  const signature=topologySignature(graph)
+  const verificationCurrent=verification?.document===selected&&verification.signature===signature
+  const report=verificationCurrent?verification.report:null
+  const verify=async()=>{
+    if(!graph||verificationFlight.current)return
+    verificationFlight.current=true;setVerifying(true);setError(null)
+    try {
+      const value=await p.client.platform('topology-verify',{body:{value:graph}})
+      setVerification({document:selected,signature,report:value})
+    } catch(e){setError(e.code||'unavailable');setVerification(null)}
+    finally{verificationFlight.current=false;setVerifying(false)}
+  }
+  const linkReport=(edge)=>verifiedLink(edge,report,signature,graph,Math.max(p.now,clock))
 
   const change = (next) => { workspace.change(next); setError(null); setMessage('') }
-  const switchTo = (value) => { workspace.select(value); setNodeId('') }
+  const switchTo = (value) => { workspace.select(value); setNodeId('');setContext(null) }
   const status = (node) => {
     if (node.device_id) {
       const item = p.inventory.find((device) => device.id === node.device_id)
       if (item) {
         if (!item.enabled) return 'UNKNOWN'
         const state = inventoryStates.find((row) => row.id === item.id)
-        if (state?.health?.stale) return 'UNKNOWN'
+        if (state?.health?.stale || state?.health?.sample_epoch+Math.max(120,item.interval*3)<p.now) return 'UNKNOWN'
         if (state?.health?.status) return state.health.status
         const observed = observedDevices.find((device) => device.host === item.host)
         return observed?.status || 'UNKNOWN'
@@ -132,7 +154,7 @@ export function TopologyEditor() {
   const insertSymbol = (symbol, position) => {
     const item = networkIcons.find((entry) => entry.id === symbol)
     if (!item || !graph || graph.nodes.length >= 100) return
-    const node = { id: id('n_'), name: item.name, kind: item.kind, icon: item.id, x: position?.x ?? 160 + graph.nodes.length % 4 * 200, y: position?.y ?? 100 + Math.floor(graph.nodes.length / 4) * 120, width: 160, height: 80, group: '', collector: '', resource_id: '', service_id: '', device_id: '' }
+    const node = { id: id('n_'), name: item.name, kind: item.kind, icon: item.id, x: position?.x ?? 160 + graph.nodes.length % 4 * 200, y: position?.y ?? 100 + Math.floor(graph.nodes.length / 4) * 120, width: 72, height: 64, group: '', collector: '', resource_id: '', service_id: '', device_id: '' }
     change({ ...graph, nodes: [...graph.nodes, node] }); setNodeId(node.id)
   }
   const importFile = async (event) => {
@@ -182,7 +204,20 @@ export function TopologyEditor() {
     setModal(null)
   }
 
-  return <>
+  const contextNode=context?.kind==='node'?graph?.nodes.find((node)=>node.id===context.id):null
+  const contextEdge=context?.kind==='edge'?graph?.links.find((edge)=>edge.id===context.id):null
+  const contextDevice=p.inventory.find((device)=>device.id===contextNode?.device_id)
+  const contextState=inventoryStates.find((row)=>row.id===contextDevice?.id)
+  const contextCheck=snapshot.checks.find((row)=>row.id===(contextState?.monitor_target||contextNode?.collector))
+  const contextObserved=observedDevices.find((device)=>device.host===contextDevice?.host||device.id===contextNode?.device_id)
+  const contextCollectors=new Set([contextNode?.collector,contextState?.monitor_target,...(contextObserved?.collectors||[])])
+  const contextResource=snapshot.checks.find((row)=>contextCollectors.has(row.id)&&!row.stale&&(row.cpu!=null||row.memory!=null))
+  const contextSample=contextState?.health?.sample_epoch||contextCheck?.sampled
+  const contextMetrics={cpu_percent:contextResource?.cpu,memory_percent:contextResource?.memory,...contextState?.telemetry}
+  const contextInterfaces=contextMetrics.interfaces?.length?contextMetrics.interfaces:snapshot.core.interfaces.filter((port)=>contextCollectors.has(port.sourceId)&&!port.stale).map((port)=>({...port,rx_bps:snapshot.core.traffic.find((traffic)=>traffic.id===port.id&&!traffic.stale)?.rx,tx_bps:snapshot.core.traffic.find((traffic)=>traffic.id===port.id&&!traffic.stale)?.tx}))
+  const contextServices=p.integrations.filter((service)=>{try{return service.enabled&&new URL(service.url).hostname===contextDevice?.host}catch{return false}})
+  const contextLink=contextEdge?report?.links.find((row)=>row.id===contextEdge.id):null
+  return <div className={`nms-topology-editor ${display.expanded?'nms-topology-expanded':''}`}>
     <AccessNote canManage={canManage} />
     <Feedback error={error || doc?.error || p.error || managementError} message={message} />
     {importError && <div className="alert alert-danger" role="alert">{importError}</div>}
@@ -201,29 +236,35 @@ export function TopologyEditor() {
         <button className="btn btn-sm btn-outline-secondary ms-md-auto" disabled={!canManage} onClick={() => fileInput.current.click()}>Impor .drawio</button>
         <input ref={fileInput} type="file" accept=".drawio,.xml" className="d-none" aria-label="Berkas draw.io" onChange={importFile}/>
         <button className="btn btn-sm btn-outline-secondary" disabled={!graph} onClick={exportFile}>Ekspor .drawio</button>
+        <button className="btn btn-sm btn-outline-secondary" aria-pressed={Boolean(display.expanded)} onClick={()=>workspace.setDisplay({expanded:!display.expanded})}>{display.expanded?'Kembali ke halaman':'Perluas editor'}</button>
       </div>
       {!graph ? <EmptyState action={false} icon="diagram-3" title="Belum ada topologi" description="Buat diagram baru atau impor berkas draw.io. Draf dipulihkan saat navigasi dan refresh."/> : <>
         <div className="d-flex flex-wrap gap-2 mb-3">
+          <button className="btn btn-sm btn-primary" disabled={verifying||!graph.nodes.length} onClick={verify}>{verifying?'Memverifikasi…':'Verify Topology'}</button>
+          <button className="btn btn-sm btn-outline-secondary" aria-pressed={!display.paletteHidden} onClick={()=>workspace.setDisplay({paletteHidden:!display.paletteHidden})}>{display.paletteHidden?'Tampilkan pustaka':'Sembunyikan pustaka'}</button>
           <button className="btn btn-sm btn-outline-secondary" disabled={!canManage || !connectedDevices.length || graph.nodes.length >= 100} onClick={() => setModal({ kind: 'observed' })}>Tambah dari monitoring</button>
           <button className="btn btn-sm btn-outline-secondary" disabled={!canManage || graph.nodes.length < 2 || graph.links.length >= 200} onClick={() => setModal({ kind: 'edge' })}>Hubungkan node</button>
           <Link className="btn btn-sm btn-outline-secondary" to="/management">Kelola perangkat</Link>
           <button className="btn btn-sm btn-outline-secondary" disabled={!canManage} onClick={() => setModal({ kind: 'rename' })}>Ubah nama</button>
           <button className="btn btn-sm btn-outline-danger" disabled={!canManage || doc.saving} onClick={() => setModal({ kind: 'delete' })}>Hapus topologi</button>
           <div className="btn-group ms-md-auto">
-            <button className="btn btn-sm btn-outline-secondary" aria-label="Perkecil canvas" onClick={() => setView((current) => ({ ...current, zoom: Math.max(.25, current.zoom / 1.25) }))}>−</button>
+            <button className="btn btn-sm btn-outline-secondary" aria-label="Perkecil canvas" onClick={() => setView((current) => ({ ...current, zoom: Math.max(.1, current.zoom / 1.25) }))}>−</button>
             <button className="btn btn-sm btn-outline-secondary" onClick={() => setView({ x: 0, y: 0, zoom: 1 })}>{Math.round(view.zoom * 100)}% · Atur ulang</button>
-            <button className="btn btn-sm btn-outline-secondary" aria-label="Perbesar canvas" onClick={() => setView((current) => ({ ...current, zoom: Math.min(3, current.zoom * 1.25) }))}>+</button>
+            <button className="btn btn-sm btn-outline-secondary" aria-label="Perbesar canvas" onClick={() => setView((current) => ({ ...current, zoom: Math.min(4, current.zoom * 1.25) }))}>+</button>
           </div>
         </div>
-        <div className="nms-topology-workspace">
+        <div className={`nms-topology-workspace ${display.paletteHidden?'nms-topology-no-palette':''}`}>
+          {!display.paletteHidden&&
           <aside className="nms-topology-palette" aria-label="Pustaka ikon perangkat">
             <label htmlFor="topology-symbol-search" className="form-label small fw-semibold">Pustaka perangkat</label>
             <input id="topology-symbol-search" className="form-control form-control-sm mb-2" placeholder="Cari ikon…" value={query} onChange={(event) => setQuery(event.target.value)}/>
             <div className="nms-topology-symbols">{networkIcons.filter((item) => (item.name + ' ' + item.kind).toLowerCase().includes(query.toLowerCase())).map((item) => <button key={item.id} draggable={canManage} disabled={!canManage || graph.nodes.length >= 100} className="btn btn-sm btn-light border text-start" onDragStart={(event) => event.dataTransfer.setData('application/theaz-device', item.id)} onClick={() => insertSymbol(item.id)}><img src={iconURL(item.id)} alt="" width="28" height="28"/><span>{item.name}</span></button>)}</div>
-          </aside>
-          <Suspense fallback={<p>Memuat canvas…</p>}><TopologyCanvas key={selected} graph={graph} view={view} canManage={canManage} onChange={change} onUndo={workspace.undo} onRedo={workspace.redo} onView={setView} onSelect={setNodeId} onDrop={insertSymbol} status={status} edgeStatus={(edge) => portObservation(edge, graph.nodes, snapshot.core.interfaces, p.capabilities.inventory_targets).status} tooltip={(node) => node.name + ' · ' + status(node) + '\n' + (node.group ? 'Grup: ' + node.group + '\n' : '') + nodeServices(node).map((item) => item.kind + ': ' + item.name + ' · ' + item.status).join('\n')} edgeTooltip={(edge) => (edge.label || edge.type || '') + ' · ' + portObservation(edge, graph.nodes, snapshot.core.interfaces, p.capabilities.inventory_targets).scope} onEdit={(kind, value) => { const item = (kind === 'node' ? graph.nodes : graph.links).find((entry) => entry.id === value); if (item) setModal({ kind, [kind]: item }) }}/></Suspense>
+          </aside>}
+          <Suspense fallback={<p>Memuat canvas…</p>}><TopologyCanvas key={selected} graph={graph} view={view} canManage={canManage} onChange={change} onUndo={workspace.undo} onRedo={workspace.redo} onView={setView} onSelect={setNodeId} onDrop={insertSymbol} onContext={setContext} status={status} animateEdge={(edge)=>Boolean(linkReport(edge))&&[edge.source,edge.target].every((id)=>status(graph.nodes.find((node)=>node.id===id))==='UP')&&portObservation(edge,graph.nodes,snapshot.core.interfaces,p.capabilities.inventory_targets).status!=='DOWN'} edgeStatus={(edge) => linkReport(edge)?'UP':portObservation(edge, graph.nodes, snapshot.core.interfaces, p.capabilities.inventory_targets).status} tooltip={(node) => node.name + ' · ' + status(node) + '\n' + (node.group ? 'Grup: ' + node.group + '\n' : '') + nodeServices(node).map((item) => item.kind + ': ' + item.name + ' · ' + item.status).join('\n')} edgeTooltip={(edge) => (edge.label || edge.type || '') + ' · ' + (report?.links.find((row)=>row.id===edge.id)?.message||'Relasi belum diverifikasi')} onEdit={(kind, value) => { const item = (kind === 'node' ? graph.nodes : graph.links).find((entry) => entry.id === value); if (item) setModal({ kind, [kind]: item }) }}/></Suspense>
         </div>
         <p className="small text-muted mt-2 mb-0">Seret ikon ke canvas atau klik untuk menambah. Seret pegangan koneksi antarnode; klik ganda untuk detail. Seret area kosong untuk pan, Ctrl + roda mouse untuk zoom. Maksimal 100 node dan 200 koneksi. Ikon manual tidak memicu konfigurasi atau pemeriksaan jaringan.</p>
+        {verification&&!verificationCurrent&&<div className="alert alert-warning mt-3">Relasi atau perangkat berubah. Jalankan Verify Topology kembali sebelum animasi ditampilkan.</div>}
+        {report&&<TopologyVerificationResults report={report} now={Math.max(p.now,clock)}/>}
         {selectedNode && <div className="border rounded p-3 mt-3"><div className="d-flex flex-wrap gap-2 align-items-center"><strong>{selectedNode.name}</strong><Badge status={status(selectedNode)}>{status(selectedNode)}</Badge><button className="btn btn-sm btn-outline-primary ms-auto" onClick={() => setModal({ kind: 'node', node: selectedNode })}>Detail node</button>{canManage && <button className="btn btn-sm btn-outline-danger" onClick={() => setModal({ kind: 'delete-node' })}>Hapus node</button>}</div><p className="small text-muted mb-0 mt-2">{nodeServices(selectedNode).map((item) => item.kind + ': ' + item.name + ' · ' + item.status).join(' / ') || 'Belum ada layanan terpantau yang terkait.'}</p></div>}
       </>}
     </Panel>
@@ -235,7 +276,7 @@ export function TopologyEditor() {
       setModal(null)
     }}/>}
     {modal?.kind === 'observed' && <ConnectedDeviceModal devices={connectedDevices.filter((device) => !visibleGraph.nodes.some((node) => node.device_id === device.device_id))} onClose={() => setModal(null)} onSelect={insert}/>}
-    {modal?.kind === 'node' && <NodeForm node={modal.node} canManage={canManage} onClose={() => setModal(null)} onSave={(updated) => {
+    {modal?.kind === 'node' && <NodeForm node={modal.node} inventory={p.inventory} inventoryTargets={p.capabilities.inventory_targets} canManage={canManage} onClose={() => setModal(null)} onSave={(updated) => {
       change({ ...graph, nodes: graph.nodes.map((node) => node.id === updated.id ? updated : node) })
       setModal(null)
     }}/>}
@@ -249,7 +290,17 @@ export function TopologyEditor() {
     {modal?.kind === 'delete' && <Confirmation title="Hapus topologi?" danger onClose={() => setModal(null)} onConfirm={removeGraph} busy={busy}><p>{saved?.name} akan dihapus dari penyimpanan NMS.</p><Feedback error={error}/></Confirmation>}
     {modal?.kind === 'delete-node' && <Confirmation title="Hapus perangkat dan relasinya?" danger onClose={() => setModal(null)} onConfirm={deleteNode}><p>{selectedNode?.name}. Simpan topologi setelah perubahan.</p></Confirmation>}
 
-  </>
+    {context&&(contextNode||contextEdge)&&<TopologyContextMenu position={context} onClose={()=>setContext(null)}>
+      {contextNode?<><strong className="d-block mb-2">{contextNode.name}</strong><Badge status={status(contextNode)}/><dl className="nms-topology-details mt-2"><dt>IP manajemen</dt><dd>{contextDevice?.host||'Belum ditautkan'}</dd><dt>Vendor / model</dt><dd>{[contextDevice?.vendor,contextDevice?.model].filter(Boolean).join(' / ')||'Belum diketahui'}</dd><dt>Integrasi</dt><dd>{contextDevice?.monitor_method||contextNode.collector||'Inventaris manual'}</dd><dt>Pembaruan</dt><dd>{formatTime(contextSample)}</dd>{status(contextNode)==='UP'&&<>{contextMetrics.cpu_percent!=null&&<><dt>CPU</dt><dd>{percentage(contextMetrics.cpu_percent)}</dd></>}{contextMetrics.memory_percent!=null&&<><dt>RAM</dt><dd>{percentage(contextMetrics.memory_percent)}</dd></>}</>}</dl>
+      {contextInterfaces.length>0&&status(contextNode)==='UP'&&<details><summary>{contextInterfaces.length} interface terpantau</summary>{contextInterfaces.map((port)=><div className="small border-bottom py-1" key={port.name}>{port.name} · {port.status||(port.running===true||port.running==='true'?'UP':'Belum diketahui')}{(port.rx_bps??port.rx_bits_per_second)!=null&&<div>RX {port.rx_bps??port.rx_bits_per_second} bit/s · TX {port.tx_bps??port.tx_bits_per_second??'—'} bit/s</div>}</div>)}</details>}
+      <div className="d-grid gap-2 mt-3"><button className="btn btn-sm btn-outline-primary" onClick={()=>{setModal({kind:'node',node:contextNode});setContext(null)}}>Detail / tautkan perangkat</button>{contextDevice&&<Link className="btn btn-sm btn-outline-secondary" to="/management">Kelola monitoring perangkat</Link>}{contextServices.map((service)=><Launcher small key={service.id} service={service}/>)}{canManage&&<button className="btn btn-sm btn-outline-danger" onClick={()=>{setNodeId(contextNode.id);setModal({kind:'delete-node'});setContext(null)}}>Hapus node</button>}</div></>:<><strong>{contextEdge.label||contextEdge.type}</strong><p className="small mt-2">{contextLink?.message||'Koneksi belum diverifikasi. Jalankan Verify Topology.'}</p><Badge status={linkReport(contextEdge)?'UP':'UNKNOWN'}>{linkReport(contextEdge)?'Terverifikasi':'Belum terbukti / kedaluwarsa'}</Badge>{contextLink?.evidence?.map((item)=><p className="small mt-2" key={item.collector}>{item.protocol} · {item.host} / {item.port} → {item.remote_host}<br/>{formatTime(item.sampled)}</p>)}{linkReport(contextEdge)&&contextLink.traffic&&Object.keys(contextLink.traffic).length>0&&<dl className="nms-topology-details mt-2">{Object.entries(contextLink.traffic).map(([key,value])=><div key={key}><dt>{key}</dt><dd>{value}</dd></div>)}</dl>}<p className="small text-muted">Counter/rate berasal dari interface lokal; bukan pengukuran trafik khusus pasangan perangkat ini.</p><button className="btn btn-sm btn-outline-primary" onClick={()=>{setModal({kind:'edge',edge:contextEdge});setContext(null)}}>Detail koneksi</button></>}
+    </TopologyContextMenu>}
+  </div>
+}
+
+function TopologyVerificationResults({report,now}) {
+  const expired=report.links.some((row)=>row.verified&&row.expires_at<=now)
+  return <details className="nms-topology-verification border rounded p-3 mt-3" open><summary className="fw-semibold">{report.valid&&!expired?'Topologi terverifikasi':'Topologi perlu pemeriksaan'} · {report.summary.recognized}/{report.summary.nodes} node dikenali · {report.summary.verified} koneksi terbukti · {report.summary.unproven} belum terbukti</summary><p className="small text-muted my-2">Pemeriksaan {formatTime(report.checked_at)}. Animasi hanya ilustrasi hubungan LLDP/CDP yang masih berlaku, bukan paket hasil packet capture. Bukti kedaluwarsa otomatis menghentikan animasi; jalankan verifikasi kembali.</p><div className="table-responsive"><table className="table table-sm small"><thead><tr><th>Node / koneksi</th><th>Hasil</th><th>Informasi / data yang diperlukan</th></tr></thead><tbody>{report.nodes.map((row)=><tr key={'n'+row.id}><td>{row.name}<br/>{row.host}</td><td>{row.ready?'Dikenali dan siap':row.recognized?'Dikenali':'Belum dikenali'}</td><td>{row.issues.join(' ')||`${row.method} · ${formatTime(row.sampled)}`}</td></tr>)}{report.links.map((row)=><tr key={'e'+row.id}><td>{row.id}</td><td>{row.verified?(row.expires_at>now?'Terverifikasi':'Bukti kedaluwarsa'):row.status==='MISMATCH'?'Tidak sesuai':'Belum terbukti'}</td><td>{row.message}</td></tr>)}</tbody></table></div></details>
 }
 
 function NameForm({ title, initial, onSave, onClose }) {
@@ -276,7 +327,7 @@ function ConnectedDeviceModal({ devices, onClose, onSelect }) {
   </Modal>
 }
 
-function NodeForm({ node, canManage, onSave, onClose }) {
+function NodeForm({ node, inventory, inventoryTargets, canManage, onSave, onClose }) {
   const [form, setForm] = useState(node)
   const set = (key, value) => setForm((current) => ({ ...current, [key]: value }))
   return <Modal title="Detail perangkat" onClose={onClose} footer={<><button className="btn btn-secondary" onClick={onClose}>Tutup</button>{canManage && <button className="btn btn-primary" form="node-form">Simpan detail</button>}</>}>
@@ -285,6 +336,7 @@ function NodeForm({ node, canManage, onSave, onClose }) {
       onSave(form)
     }}>
       <fieldset disabled={!canManage}><div className="row g-3">
+        <div className="col-12"><label className="form-label" htmlFor="node-device">Perangkat inventaris</label><select id="node-device" className="form-select" value={form.device_id||''} onChange={(event)=>setForm((current)=>({...current,device_id:event.target.value,collector:inventoryTargets?.[event.target.value]||'',resource_id:''}))}><option value="">Simbol manual — belum terverifikasi</option>{inventory.map((item)=><option key={item.id} value={item.id}>{item.name} · {item.host}</option>)}</select></div>
         <div className="col-md-6"><label className="form-label" htmlFor="node-name">Label pada topologi</label><input id="node-name" className="form-control" required maxLength={80} value={form.name} onChange={(event) => set('name', event.target.value)}/></div>
         <div className="col-md-6"><label className="form-label" htmlFor="node-kind">Jenis perangkat</label><select id="node-kind" className="form-select" value={form.kind} disabled={Boolean(form.device_id || form.resource_id)} onChange={(event) => set('kind', event.target.value)}>{deviceKinds.map((kind) => <option key={kind}>{kind}</option>)}</select></div>
         <div className="col-md-6"><label className="form-label" htmlFor="node-icon">Ikon perangkat</label><select id="node-icon" className="form-select" value={form.icon || form.kind} onChange={(event) => set('icon', event.target.value)}>{networkIcons.map((item) => <option key={item.id} value={item.id}>{item.name}</option>)}</select></div>

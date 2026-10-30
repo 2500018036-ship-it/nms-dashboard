@@ -28,7 +28,7 @@ SECTIONS = {
     'bridge': Section('Bridge', '/interface/bridge', 'name,mtu,actual-mtu,running,disabled,vlan-filtering,protocol-mode,pvid', ('name','running','disabled')),
     'bridge_ports': Section('Port anggota bridge', '/interface/bridge/port', 'interface,bridge,pvid,hw,inactive,disabled,edge,point-to-point,ingress-filtering,frame-types', ('interface','bridge','disabled')),
     'bridge_vlans': Section('Keanggotaan VLAN pada bridge', '/interface/bridge/vlan', 'bridge,vlan-ids,tagged,untagged,current-tagged,current-untagged,disabled,dynamic', ('bridge','vlan-ids')),
-    'neighbors': Section('Neighbor discovery', '/ip/neighbor', 'identity,address,address6,mac-address,interface,platform,board,version,uptime', ('identity','interface','address')),
+    'neighbors': Section('Neighbor discovery', '/ip/neighbor', 'identity,address,address6,mac-address,interface,platform,board,version,uptime,discovered-by', ('identity','interface','address')),
     'queues': Section('Simple queue dan statistik', '/queue/simple', 'name,target,parent,max-limit,limit-at,rate,packet-rate,bytes,packets,dropped,disabled,invalid', ('name','parent','disabled'), stats=True),
     'queue_tree': Section('Queue tree dan statistik', '/queue/tree', 'name,parent,max-limit,limit-at,rate,packet-rate,bytes,packets,dropped,disabled,invalid', ('name','parent','disabled'), stats=True),
     'firewall_filter': Section('Rule filter dan counter', '/ip/firewall/filter', 'chain,action,protocol,src-address,dst-address,src-port,dst-port,in-interface,out-interface,bytes,packets,disabled,invalid,dynamic', ('chain','action','disabled'), stats=True),

@@ -55,7 +55,7 @@ def check(row, saved, now, interval):
         '/interface/vlan': 'name,interface,vlan-id,disabled,running',
         '/interface/wireless': 'name,ssid,mode,band,frequency,channel-width,running,disabled,signal-strength,noise-floor',
         '/system/health': 'name,value,temperature,voltage,current,frequency',
-        '/ip/neighbor': 'identity,address,interface,platform,version',
+        '/ip/neighbor': 'identity,address,mac-address,interface,platform,version,discovered-by',
         '/ip/route': 'dst-address,gateway,active,disabled,distance,routing-table',
         '/interface/wireguard/peers': 'name,interface,disabled,last-handshake,rx,tx',
     }

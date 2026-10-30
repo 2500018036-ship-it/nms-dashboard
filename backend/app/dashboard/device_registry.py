@@ -24,7 +24,11 @@ def sync(store):
         policy=json.loads(settings_row[0]) if settings_row else None
         policy_changed=False
         for host, sources in grouped.items():
-            if db.execute('SELECT 1 FROM inventory_sources WHERE host=?', (host,)).fetchone():
+            registered = db.execute('SELECT targets FROM inventory_sources WHERE host=?', (host,)).fetchone()
+            if registered:
+                targets = json.loads(registered[0])
+                if any(key == 'mikrotik' for key, _ in sources) and 'mikrotik_neighbors' not in targets:
+                    db.execute('UPDATE inventory_sources SET targets=? WHERE host=?', (json.dumps(targets + ['mikrotik_neighbors']), host))
                 continue
             if policy is not None and host not in policy['allowed_hosts'] and len(policy['allowed_hosts'])<100:
                 policy['allowed_hosts'].append(host);policy_changed=True
@@ -47,7 +51,7 @@ def sync(store):
                     db.execute("UPDATE objects SET payload=?,revision=revision+1,updated=? WHERE collection='inventory' AND id=?", (json.dumps(value), now, identity))
             targets=[key for key,_ in sources if key]
             if any(key=='debian_ssh' for key in targets):targets+=['debian','docker']
-            if any(key=='mikrotik' for key in targets):targets+=['mikrotik_system','mikrotik_interfaces','mikrotik_network','mikrotik_vlan','mikrotik_routes','wireguard','network_traffic']
+            if any(key=='mikrotik' for key in targets):targets+=['mikrotik_system','mikrotik_interfaces','mikrotik_network','mikrotik_vlan','mikrotik_routes','mikrotik_neighbors','wireguard','network_traffic']
             if any(key=='proxmox' for key in targets):targets+=['proxmox_resources']
             db.execute('INSERT INTO inventory_sources VALUES(?,?,?,?)', (host, identity, primary, json.dumps(targets)))
         if policy_changed:

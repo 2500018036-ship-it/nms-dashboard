@@ -142,6 +142,21 @@ class PlatformAPI:
         return items
 
     def post(self,path,body,session):
+        if path=='/api/platform/topology-verify':
+            from app.dashboard.permissions import require
+            from app.dashboard.projection import check
+            from app.dashboard.topology_verification import verify
+            actor=require(session,'monitor.read')
+            models.fields(body,('value',),('value',))
+            graph=self.store.validate('topologies',body['value'])
+            now=time.time()
+            with closing(sqlite3.connect(self.store.path.parent/'nms.sqlite3',timeout=3)) as db:
+                rows=db.execute('SELECT target,ts,payload FROM checks WHERE id IN (SELECT MAX(id) FROM checks GROUP BY target)').fetchall()
+            intervals={self.store.inventory_target(i):i['interval'] for i in self.store.list('inventory')}
+            samples={target:check(json.loads(payload),ts,now,intervals.get(target,self.owner.settings.poll_interval)) for target,ts,payload in rows}
+            value=verify(graph,self.store,samples,now)
+            self.store.log(actor,'topology.verify','draft',f"nodes:{len(graph['nodes'])};links:{len(graph['links'])};verified:{value['summary']['verified']}")
+            return value
         credential_match=re.fullmatch(r'/api/platform/credentials/(integration|inventory|device)/([a-z0-9_]{1,80})',path)
         if credential_match:
             from app.dashboard.permissions import require

@@ -1,5 +1,6 @@
 """Strict configuration contracts. No device credentials or arbitrary commands."""
 import ipaddress
+import math
 import re
 from urllib.parse import urlsplit
 
@@ -117,7 +118,7 @@ def record(collection, body, allowed_hosts=(), targets=()):
         if not 0 < end-start <= 7*86400: raise ValueError('invalid_window')
         return {'name':text(body['name'],1,80),'scope':scope,'start':start,'end':end,'enabled':boolean(body['enabled'])}
     if collection == 'topologies':
-        fields(body, ('name','nodes','links'), ('name','nodes','links'))
+        fields(body, ('name','nodes','links','view'), ('name','nodes','links'))
         if not isinstance(body['nodes'],list) or len(body['nodes'])>100 or not isinstance(body['links'],list) or len(body['links'])>200: raise ValueError('topology_too_large')
         nodes=[]; ids=set()
         for n in body['nodes']:
@@ -148,7 +149,13 @@ def record(collection, body, allowed_hosts=(), targets=()):
                     fields(point,('x','y'),('x','y'))
                     item['points'].append({'x':integer(point['x'],-5000,5000),'y':integer(point['y'],-5000,5000)})
             ids_links.add(item['id']);links.append(item)
-        return {'name':text(body['name'],1,80),'nodes':nodes,'links':links}
+        result={'name':text(body['name'],1,80),'nodes':nodes,'links':links}
+        if 'view' in body:
+            view=body['view'];fields(view,('x','y','zoom'),('x','y','zoom'))
+            if any(type(view[k]) not in (int,float) or not math.isfinite(view[k]) for k in view):raise ValueError('invalid_number')
+            if not -50000<=view['x']<=50000 or not -50000<=view['y']<=50000 or not .1<=view['zoom']<=4:raise ValueError('invalid_number')
+            result['view']={k:round(view[k],4) for k in ('x','y','zoom')}
+        return result
     raise ValueError('invalid_collection')
 
 

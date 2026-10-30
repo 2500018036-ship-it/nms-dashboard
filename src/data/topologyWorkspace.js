@@ -1,19 +1,26 @@
-const graphValue = (record) => ({ name: record.name, nodes: record.nodes, links: record.links })
-export function createTopologyWorkspace({ client, username, storage = globalThis.localStorage, makeId = () => crypto.randomUUID().replaceAll('-', ''), onSaved = () => {} }) {
+const graphValue = (record) => ({ name: record.name, nodes: record.nodes, links: record.links, ...(record.view ? {view: record.view} : {}) })
+export function createTopologyWorkspace({ client, username, storage = globalThis.localStorage, makeId = () => crypto.randomUUID().replaceAll('-', ''), onSaved = () => {}, autoSave = false, saveDelay = 1500 }) {
   const key = 'theaz.topology.v1.' + username
   let restored = {}
   try { const raw = storage.getItem(key) || '{}'; if (raw.length <= 3 * 1024 * 1024) restored = JSON.parse(raw) } catch { /* Server records remain available. */ }
   const documents = Object.fromEntries(Object.entries(restored.documents || {}).filter(([, doc]) => doc?.graph && typeof doc.graph.name === 'string' && Array.isArray(doc.graph.nodes) && doc.graph.nodes.length <= 100 && Array.isArray(doc.graph.links) && doc.graph.links.length <= 200).slice(-20))
   let state = { selected: typeof restored.selected === 'string' ? restored.selected : '', documents, records: [], storageError: false, limitError: false }
   const listeners = new Set(); const flights = new Map(); const histories = new Map()
-  let active = false
+  let active = false; let timer = null
+  const schedule = () => {
+    if (!active || !autoSave) return
+    clearTimeout(timer)
+    timer = setTimeout(() => {
+      for (const [id, doc] of Object.entries(state.documents)) if (doc.dirty && !doc.saving && !doc.error) save(id)
+    }, saveDelay)
+  }
   const update = (patch) => {
     state = { ...state, ...patch }
     try { storage.setItem(key, JSON.stringify({ selected: state.selected, documents: state.documents })); state.storageError = false } catch { state.storageError = true }
     listeners.forEach((listener) => listener())
   }
   const patchDocument = (id, patch) => update({ documents: { ...state.documents, [id]: { ...state.documents[id], ...patch } } })
-  const documentFrom = (record) => ({ graph: graphValue(record), serverId: record.id, revision: record.revision, dirty: false, version: 0, view: { x: 0, y: 0, zoom: 1 }, pending: null, error: null })
+  const documentFrom = (record) => ({ graph: graphValue(record), serverId: record.id, revision: record.revision, dirty: false, version: 0, view: record.view || { x: 0, y: 0, zoom: 1 }, pending: null, error: null })
   const select = (id) => {
     let selected = Object.keys(state.documents).find((key) => key === id || state.documents[key].serverId === id)
     if (!selected) {
@@ -39,7 +46,7 @@ export function createTopologyWorkspace({ client, username, storage = globalThis
         onSaved()
         return result
       } catch (error) { if (active) patchDocument(id, { error: error.code || 'unavailable', ...(['validation_failed', 'revision_conflict', 'permission_denied', 'invalid_fields', 'invalid_number', 'invalid_text'].includes(error.code) ? { pending: null } : {}) }); return null }
-      finally { flights.delete(id); if (active && state.documents[id]) patchDocument(id, { saving: false }) }
+      finally { flights.delete(id); if (active && state.documents[id]) { patchDocument(id, { saving: false }); if (state.documents[id].dirty && !state.documents[id].error) schedule() } }
     })()
     flights.set(id, flight)
     return flight
@@ -60,7 +67,7 @@ export function createTopologyWorkspace({ client, username, storage = globalThis
     create(name) {
       if (Object.keys(state.documents).length >= 20) { update({ limitError: true }); return false }
       const id = 'draft_' + makeId()
-      update({ selected: id, documents: { ...state.documents, [id]: { graph: { name, nodes: [], links: [] }, serverId: null, revision: null, version: 1, dirty: true, pending: null, view: { x: 0, y: 0, zoom: 1 }, error: null } } })
+      update({ selected: id, documents: { ...state.documents, [id]: { graph: { name, nodes: [], links: [] }, serverId: null, revision: null, version: 1, dirty: true, pending: null, view: { x: 0, y: 0, zoom: 1 }, error: null } } }); schedule()
     },
     change(graph) {
       const doc = state.documents[state.selected]
@@ -69,20 +76,27 @@ export function createTopologyWorkspace({ client, username, storage = globalThis
         history.undo = [...history.undo, structuredClone(doc.graph)].slice(-20); history.redo = []
         histories.set(state.selected, history)
         patchDocument(state.selected, { graph, dirty: true, version: doc.version + 1, error: null })
+        schedule()
       }
     },
     undo() {
       const doc = state.documents[state.selected]; const history = histories.get(state.selected)
-      if (doc && history?.undo.length) { history.redo.push(structuredClone(doc.graph)); patchDocument(state.selected, { graph: history.undo.pop(), dirty: true, version: doc.version + 1, error: null }) }
+      if (doc && history?.undo.length) { history.redo.push(structuredClone(doc.graph)); patchDocument(state.selected, { graph: history.undo.pop(), dirty: true, version: doc.version + 1, error: null }); schedule() }
     },
     redo() {
       const doc = state.documents[state.selected]; const history = histories.get(state.selected)
-      if (doc && history?.redo.length) { history.undo.push(structuredClone(doc.graph)); patchDocument(state.selected, { graph: history.redo.pop(), dirty: true, version: doc.version + 1, error: null }) }
+      if (doc && history?.redo.length) { history.undo.push(structuredClone(doc.graph)); patchDocument(state.selected, { graph: history.redo.pop(), dirty: true, version: doc.version + 1, error: null }); schedule() }
     },
     setView(value) {
       const doc = state.documents[state.selected]
-      if (doc) patchDocument(state.selected, { view: typeof value === 'function' ? value(doc.view) : value })
+      if (doc) {
+        const raw = typeof value === 'function' ? value(doc.view) : value
+        const view = {x:Math.max(-50000,Math.min(50000,raw.x)),y:Math.max(-50000,Math.min(50000,raw.y)),zoom:Math.max(.1,Math.min(4,raw.zoom))}
+        if (JSON.stringify(view) === JSON.stringify(doc.view)) return
+        patchDocument(state.selected, { view, ...(autoSave ? {graph:{...doc.graph,view},dirty:true,version:doc.version+1,error:null} : {}) }); schedule()
+      }
     },
+    setDisplay(patch) { const doc=state.documents[state.selected]; if(doc) patchDocument(state.selected,{display:{...doc.display,...patch}}) },
     discard() {
       const doc = state.documents[state.selected]
       if (!doc || doc.saving) return
@@ -98,7 +112,8 @@ export function createTopologyWorkspace({ client, username, storage = globalThis
     start() {
       active = true
       for (const [id, doc] of Object.entries(state.documents)) if (doc.pending) save(id)
-      return () => { active = false }
+      schedule()
+      return () => { active = false; clearTimeout(timer) }
     },
   }
 }

@@ -61,7 +61,7 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
   const get = (path, signal) => request(path, signal)
   return {
     platform: (path = '', { body, params = {}, signal } = {}) => {
-      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|assistant-history|ask|monitoring\/routeros\/read|inventory\/import|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}(?:\/restore)?|\/runs\/run_[a-f0-9]{24}|\/compare)?|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
+      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|assistant-history|ask|topology-verify|monitoring\/routeros\/read|inventory\/import|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}(?:\/restore)?|\/runs\/run_[a-f0-9]{24}|\/compare)?|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
       const allowed = path === 'report' ? ['target','from','to','resource'] : path === 'audit' ? ['page','q'] : path === 'application-logs' ? ['page','q','level','from','to'] : path === 'assistant-history' ? ['before'] : path === 'device-backups/compare' ? ['left','right'] : []
       if (!valid || Object.keys(params).some((key) => !allowed.includes(key))) return Promise.reject(new ApiError('target_not_allowed'))
       const query = new URLSearchParams(params)
