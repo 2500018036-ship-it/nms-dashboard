@@ -134,7 +134,7 @@ class Platform:
             if method=='http' and target.get('kind')=='web' and target.get('url')==item.get('monitor_url'):return key
             if target.get('host')==item['host'] and target.get('kind')==method and (method=='icmp' or target.get('port')==item.get('monitor_port')):
                 if method!='dns' or target.get('query')==item.get('dns_query'):return key
-        return 'inventory_'+item['id'] if method in {'icmp','tcp','http','dns'} else ''
+        return 'inventory_'+item['id'] if method in {'icmp','tcp','http','dns','snmp','ssh'} else ''
 
     def validate(self,collection,body,extra_hosts=()):
         cfg=self.get_settings()

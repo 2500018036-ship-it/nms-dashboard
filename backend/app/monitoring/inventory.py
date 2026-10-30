@@ -1,7 +1,7 @@
 """Inventory enrollment into the existing monitoring engine, no browser polling."""
 import os
 import ipaddress
-from app.monitoring import tcp,dns,icmp
+from app.monitoring import tcp,dns,icmp,snmp,ssh
 from app.monitoring.common import result
 from app.monitoring.service_probe import probe
 
@@ -16,9 +16,9 @@ def binding(item):
     return ''
 
 def scheduled(item):
-    return item['enabled'] and item.get('monitor_method') in {'icmp','tcp','http','dns'}
+    return item['enabled'] and item.get('monitor_method') in {'icmp','tcp','http','dns','snmp','ssh'}
 
-async def collect(item,allowed_hosts):
+async def collect(item,allowed_hosts,credentials=None,previous=None):
     target='inventory_'+item['id'];method=item.get('monitor_method')
     if item['host'] not in allowed_hosts:return result(target,'inventory',error='host_not_allowed')
     if method in {'icmp','tcp','dns'}:
@@ -28,5 +28,7 @@ async def collect(item,allowed_hosts):
     elif method=='tcp':value=await tcp.probe(target,item['host'],item['monitor_port'])
     elif method=='dns':value=await dns.probe(target,item['host'],item['monitor_port'],item['dns_query'])
     elif method=='http':value=await probe(target,item['monitor_url'],allowed_hosts)
+    elif method=='snmp':value=await snmp.probe(target,item['host'],item['monitor_port'],(credentials or {}).get('snmp',{}),item.get('monitor_categories',[]),previous)
+    elif method=='ssh':value=await ssh.probe(target,item['host'],item['monitor_port'],(credentials or {}).get('ssh',{}),item.get('monitor_categories',[]),previous,item.get('vendor',''),item.get('model',''))
     else:return result(target,'inventory',error='adapter_not_configured')
     return {**value,'host':item['host'],'display_name':item['name']}

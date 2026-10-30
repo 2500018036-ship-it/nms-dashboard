@@ -73,19 +73,25 @@ def record(collection, body, allowed_hosts=(), targets=()):
         return {'name':text(body['name'],1,80),'url':url(body['url'],allowed_hosts),'kind':kind,'group':text(body.get('group',''),0,48),'enabled':enabled,
             'monitor_enabled':monitored,'poll_interval':integer(body.get('poll_interval',60),60,3600),'collector':collector,'authentication':auth}
     if collection == 'inventory':
-        fields(body, ('name','host','type','vendor','model','methods','interval','group','tags','profile','enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp'), ('name','host','type','methods','interval','profile','enabled'))
+        fields(body, ('name','host','type','vendor','model','methods','interval','group','tags','profile','enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp','monitor_categories'), ('name','host','type','methods','interval','profile','enabled'))
         methods = body['methods']; tags = body.get('tags', [])
-        if not isinstance(methods,list) or not methods or len(methods)>6 or any(v not in {'icmp','tcp','snmp','api','dns','http','agent'} for v in methods): raise ValueError('invalid_methods')
+        if not isinstance(methods,list) or not methods or len(methods)>6 or any(v not in {'icmp','tcp','snmp','ssh','api','dns','http','agent'} for v in methods): raise ValueError('invalid_methods')
         if body['type'] not in {'router','switch','server','hypervisor','container-host','dns','vpn','service','access-point','firewall','iot','generic','other'}: raise ValueError('invalid_type')
         if body['profile'] not in {'network','host','services','connectivity','virtualization','custom'}: raise ValueError('invalid_profile')
         if not isinstance(tags,list) or len(tags)>12: raise ValueError('invalid_tags')
         method=body.get('monitor_method','')
         if not isinstance(method,str) or method not in {'','icmp','tcp','http','dns','routeros','proxmox','snmp','ssh'}:raise ValueError('invalid_monitor_method')
+        defaults=(['network_status','system_information','interfaces','traffic','bandwidth'] if method=='snmp' else ['network_status','system_information','cpu','memory','storage','interfaces','traffic','bandwidth'] if method=='ssh' else ['network_status'] if method else [])
+        categories=body.get('monitor_categories',defaults)
+        category_ids={'network_status','latency','system_information','cpu','memory','storage','interfaces','traffic','bandwidth','vlan','routing','wireless','temperature','sensors','virtualization','service_health'}
+        if not isinstance(categories,list) or len(categories)>len(category_ids) or any(not isinstance(v,str) or v not in category_ids for v in categories):raise ValueError('invalid_monitor_categories')
+        if method in {'snmp','ssh'} and method not in methods:raise ValueError('invalid_monitor_method')
         reference=text(body.get('credential_ref',''),0,40)
         if reference not in {'','routeros-default','proxmox-default'}:raise ValueError('invalid_credential_reference')
         address=host(body['host'])
         if method and address not in allowed_hosts:raise ValueError('host_not_allowed')
-        port=integer(body.get('monitor_port',443),1,65535)
+        default_port=161 if method=='snmp' else 22 if method=='ssh' else 53 if method=='dns' else 443
+        port=integer(body.get('monitor_port',default_port),1,65535)
         monitor_url=text(body.get('monitor_url',''),0,500)
         if method=='http':
             monitor_url=url(monitor_url,allowed_hosts)
@@ -101,6 +107,7 @@ def record(collection, body, allowed_hosts=(), targets=()):
             'methods':list(dict.fromkeys(methods)),'interval':integer(body['interval'],15,86400),'group':text(body.get('group',''),0,48),
             'tags':list(dict.fromkeys(text(t,1,32) for t in tags)),'profile':body['profile'],'enabled':boolean(body['enabled']),
             'location':text(body.get('location',''),0,80),'role':text(body.get('role',''),0,80),'hostname':text(body.get('hostname',''),0,253),
+            'monitor_categories':list(dict.fromkeys(categories)),
             'credential_ref':reference,'monitor_method':method,'monitor_port':port,'monitor_url':monitor_url,'dns_query':query,'mac_address':mac,'follow_dhcp':follow}
     if collection == 'maintenance':
         fields(body, ('name','scope','start','end','enabled'), ('name','scope','start','end','enabled'))
@@ -146,5 +153,5 @@ def record(collection, body, allowed_hosts=(), targets=()):
 
 
 def public_validation_code(exc):
-    known={'host_not_allowed','invalid_mac_address','invalid_dhcp_tracking','duplicate_host','referenced_by_topology','monitor_limit','invalid_monitor_method','credential_host_mismatch','literal_ipv4_required','invalid_host','invalid_number','invalid_fields','invalid_methods','invalid_profile','invalid_type','invalid_text','url_host_mismatch','invalid_service_url','invalid_dns_query','backup_unsupported','backup_busy','backup_unavailable','backup_integrity_failed','backup_device_mismatch','restore_confirmation_required','readonly_account_required','verified_api_ssl_required','permission_denied','authentication_failed','timeout','connection_failed','collector_busy','empty_backup','backup_too_large','sensitive_data_detected'}
+    known={'host_not_allowed','invalid_mac_address','invalid_dhcp_tracking','duplicate_host','referenced_by_topology','monitor_limit','invalid_monitor_method','credential_host_mismatch','literal_ipv4_required','invalid_host','invalid_number','invalid_fields','invalid_methods','invalid_profile','invalid_type','invalid_text','url_host_mismatch','invalid_service_url','invalid_dns_query','backup_unsupported','backup_busy','backup_unavailable','backup_integrity_failed','backup_device_mismatch','restore_confirmation_required','readonly_account_required','verified_api_ssl_required','permission_denied','authentication_failed','timeout','connection_failed','collector_busy','empty_backup','backup_too_large','sensitive_data_detected','invalid_monitor_categories','unsupported_monitor_category','missing_snmp_credentials','unsupported_auth_protocol','snmp_agent_error','snmp_identity_unavailable','snmp_request_failed'}
     return str(exc) if str(exc) in known else 'validation_failed'

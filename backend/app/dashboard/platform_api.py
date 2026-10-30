@@ -214,12 +214,16 @@ class PlatformAPI:
             return {'ok':True,'count':len(values)}
         for collection in models.COLLECTIONS:
             base='/api/platform/'+collection
-            if path==base:return self.store.save(collection,body,actor)
+            if path==base:
+                if collection=='inventory':self.validate_monitor_categories(body.get('value'))
+                return self.store.save(collection,body,actor)
             if path.startswith(base+'/'):
                 parts=path.removeprefix(base+'/').split('/')
                 identity=parts[0]
                 if not re.fullmatch(r'[a-z0-9_]{1,80}',identity):raise ValueError('invalid_id')
-                if len(parts)==1:return self.store.save(collection,body,actor,identity)
+                if len(parts)==1:
+                    if collection=='inventory':self.validate_monitor_categories(body.get('value'),identity)
+                    return self.store.save(collection,body,actor,identity)
                 if len(parts)==2 and parts[1]=='delete':
                     models.fields(body,('revision','detach_topology'),('revision',));return self.store.remove(collection,identity,body['revision'],actor,detach=models.boolean(body.get('detach_topology',False)))
                 if len(parts)==2 and parts[1]=='test' and collection=='integrations':
@@ -271,21 +275,43 @@ class PlatformAPI:
         return {'id':identity,'state':'running'}
 
     def inventory_status(self,item):
+        from app.monitoring.device_capabilities import detect,telemetry
         target=self.store.inventory_target(item)
         value={'id':item['id'],'name':item['name'],'host':item['host'],'monitor_target':target,'enabled':item['enabled'],
-            'integration_state':'NOT_CONFIGURED' if not target else 'WAITING_FOR_SAMPLE','health':None}
+            'integration_state':'NOT_CONFIGURED' if not target else 'WAITING_FOR_SAMPLE','health':None,
+            'supported_categories':[],'enabled_categories':[],'telemetry':{}}
         if target and item['enabled']:
             with closing(sqlite3.connect(self.store.path.parent/'nms.sqlite3',timeout=3)) as db:
                 row=db.execute('SELECT ts,payload FROM checks WHERE target=? ORDER BY id DESC LIMIT 1',(target,)).fetchone()
             if row:
                 from app.dashboard.projection import check
-                clean=check(json.loads(row[1]),row[0],time.time(),max(self.owner.settings.poll_interval,item['interval']))
-                value['health']={k:clean.get(k) for k in ('status','error','sample_epoch','stale','method')}
+                clean=check(json.loads(row[1]),row[0],time.time(),item['interval'])
                 if clean.get('host') and clean['host']!=item['host']:
                     value['health']=None;value['integration_state']='WAITING_FOR_SAMPLE'
-                else:value['integration_state']='CONNECTED' if clean['status']=='UP' else 'STALE' if clean.get('stale') else 'UNREACHABLE' if clean['status']=='DOWN' else 'COLLECTION_FAILED' if clean.get('error') else 'UNKNOWN'
+                else:
+                    value['health']={k:clean.get(k) for k in ('status','error','sample_epoch','stale','method')}
+                    value['supported_categories']=detect(clean)
+                    value['enabled_categories']=[category for category in item.get('monitor_categories',[]) if category in value['supported_categories']]
+                    value['telemetry']=telemetry({**clean,'sample_epoch':clean.get('sample_epoch')})
+                    value['integration_state']='CONNECTED' if clean['status']=='UP' else 'STALE' if clean.get('stale') else 'UNREACHABLE' if clean['status']=='DOWN' else 'COLLECTION_FAILED' if clean.get('error') else 'UNKNOWN'
         if not item['enabled']:value['integration_state']='DISABLED'
         return value
+
+    def validate_monitor_categories(self,value,identity=None):
+        if not isinstance(value,dict) or 'monitor_categories' not in value or not identity:return
+        existing=self.store.get('inventory',identity)
+        if not existing:return
+        if value.get('monitor_categories')==existing.get('monitor_categories'):return
+        target=self.store.inventory_target(existing)
+        if not target:return
+        with closing(sqlite3.connect(self.store.path.parent/'nms.sqlite3',timeout=3)) as db:
+            row=db.execute('SELECT ts,payload FROM checks WHERE target=? ORDER BY id DESC LIMIT 1',(target,)).fetchone()
+        if not row:return
+        from app.dashboard.projection import check
+        from app.monitoring.device_capabilities import detect
+        sample=check(json.loads(row[1]),row[0],time.time(),existing['interval'])
+        available=set(detect(sample))
+        if any(category not in available for category in value['monitor_categories']):raise ValueError('unsupported_monitor_category')
 
     def test_inventory(self,identity,body,session):
         from app.dashboard.permissions import require
@@ -305,14 +331,19 @@ class PlatformAPI:
         async def test():
             if target.startswith('inventory_') and not item['enabled']:
                 from app.monitoring.inventory import collect
-                return await collect(item,self.store.get_settings()['value']['allowed_hosts'])
+                try:creds=self.credentials.collector_credentials('inventory',item['id']) if item.get('monitor_method') in {'snmp','ssh'} else None
+                except CredentialVaultUnavailable:return {'target':target,'status':'UNKNOWN','error':'credential_vault_unavailable'}
+                previous=self.monitor.database.history(target,1)
+                return await collect(item,self.store.get_settings()['value']['allowed_hosts'],creds,previous[0] if previous else None)
             return await self.monitor.check(target,force=True)
         future=asyncio.run_coroutine_threadsafe(test(),self.loop)
-        try:value=future.result(timeout=35 if item.get('follow_dhcp') else 6)
+        try:value=future.result(timeout=35 if item.get('follow_dhcp') or item.get('monitor_method') in {'snmp','ssh'} else 6)
         except concurrent.futures.TimeoutError:
             future.cancel();return {'status':'UNKNOWN','error':'test_timeout'}
         from app.dashboard.projection import check
-        return check(value,time.time(),time.time(),max(30,item['interval']))
+        clean=check(value,time.time(),time.time(),item['interval'])
+        from app.monitoring.device_capabilities import detect,telemetry
+        return {**clean,'supported_categories':detect(clean),'telemetry':telemetry({**clean,'sample_epoch':clean.get('sample_epoch')})}
 
     def test_service(self,identity,actor):
         item=self.store.get('integrations',identity)

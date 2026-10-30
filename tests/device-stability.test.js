@@ -20,3 +20,12 @@ test('registration retains DHCP identity while excluding server revisions and cr
   assert.equal(validateDevice({ ...form, mac_address: '' }).value, null)
   assert.equal(validateDevice({ ...form, monitor_method: 'http' }).value, null)
 })
+
+test('per-device monitoring category choices persist in inventory without admitting unknown capabilities',()=>{
+  const value={...newDevice(),name:'SNMP switch',host:'192.168.10.26',type:'switch',vendor:'Cisco',methods:['snmp'],monitor_method:'snmp',monitor_port:161,
+    monitor_categories:['network_status','system_information','interfaces','traffic']}
+  const validated=validateDevice(value)
+  assert.deepEqual(validated.errors,{})
+  assert.deepEqual(inventoryValue(validated.value).monitor_categories,value.monitor_categories)
+  assert.equal(validateDevice({...value,monitor_categories:['shell_access']}).value,null)
+})

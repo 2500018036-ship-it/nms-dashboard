@@ -21,6 +21,8 @@ class Monitoring:
         self.settings, self.database = settings, database
         self.platform=Platform(str(__import__('pathlib').Path(database.db.execute('PRAGMA database_list').fetchone()[2]).parent),settings)
         self.platform.apply(settings)
+        from app.dashboard.credentials import CredentialVault
+        self.credentials=CredentialVault(self.platform)
         self.router = MikroTik(settings)
         from app.dashboard.device_backups import DeviceConfigBackups
         self.device_backups = DeviceConfigBackups(self.platform, self)
@@ -55,7 +57,7 @@ class Monitoring:
             source=self.platform.source(target=target)
             source_item=self.platform.get('inventory',source[1]) if source else None
             if source_item and target in self.settings.targets and self.settings.targets[target].get('kind')=='icmp':device=source_item
-            ttl=service['poll_interval'] if service else max(30,device['interval']) if device else 60
+            ttl=service['poll_interval'] if service else device['interval'] if device else 60
             configuration=hashlib.sha256(json.dumps(device,sort_keys=True).encode()).hexdigest() if device else hashlib.sha256(service['url'].encode()).hexdigest() if service else None
             if not force and target in self.cache and time.monotonic()-self.cache[target][0] < ttl and (configuration is None or self.cache[target][1].get('configuration_hash')==configuration):
                 return self.cache[target][1]
@@ -81,7 +83,13 @@ class Monitoring:
             if not item or not scheduled(item):return result(target,'inventory',error='target_not_allowed')
             canonical=self.platform.inventory_target(item)
             if canonical!=target:return result(target,'inventory',error='use_shared_collector')
-            value=await self.icmp_device(target,item) if item.get('monitor_method')=='icmp' else await collect(item,self.platform.get_settings()['value']['allowed_hosts'])
+            previous=self.database.history(target,1)
+            try:credentials=self.credentials.collector_credentials('inventory',item['id']) if item.get('monitor_method') in {'snmp','ssh'} else None
+            except Exception as exc:
+                from app.dashboard.credentials import CredentialVaultUnavailable
+                if isinstance(exc,CredentialVaultUnavailable):return result(target,item.get('monitor_method','SNMP').upper(),error='credential_vault_unavailable')
+                raise
+            value=await self.icmp_device(target,item) if item.get('monitor_method')=='icmp' else await collect(item,self.platform.get_settings()['value']['allowed_hosts'],credentials,previous[0] if previous else None)
             return {**value,'configuration_hash':hashlib.sha256(json.dumps(item,sort_keys=True).encode()).hexdigest()}
         if target.startswith('service_'):
             service=self.platform.get('integrations',target.removeprefix('service_'))

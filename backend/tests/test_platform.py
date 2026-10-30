@@ -100,7 +100,8 @@ class CredentialVaultTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as directory, patch.dict(os.environ, {'NMS_CREDENTIALS_KEY':key}):
             store=Platform(directory);vault=CredentialVault(store)
             value={'gui':{'username':'router-admin','password':'gui-secret','fields':[{'id':'api-token','label':'Token API','type':'api_key','value':'custom-secret'}]},
-                'wifi_networks':[{'id':'ssid1','ssid':'Homelab-5G','password':'wifi-secret'}], 'custom_fields':[{'id':'ssh-user','label':'SSH username','type':'username','value':'azril'}]}
+                'wifi_networks':[{'id':'ssid1','ssid':'Homelab-5G','password':'wifi-secret'}], 'custom_fields':[{'id':'ssh-user','label':'SSH username','type':'username','value':'azril'}],
+                'snmp':dict(CredentialVault.EMPTY['snmp']),'ssh':dict(CredentialVault.EMPTY['ssh'])}
             vault.save('integration','int_'+'a'*24,value,'admin')
             self.assertEqual(vault.read('integration','int_'+'a'*24,'admin')['credentials'],value)
             with store.db() as db:
@@ -203,7 +204,7 @@ class PlatformAPITests(unittest.TestCase):
             code,item,_=self.request('/api/platform/integrations','POST',{'value':dict(name='DNS dashboard',url='http://192.168.20.199:5380/',kind='dns',enabled=True)})
             self.assertEqual(code,200)
             path='/api/platform/credentials/integration/'+item['id']
-            value={'gui':{'username':'dns-admin','password':'gui-secret','fields':[]},'wifi_networks':[{'id':'ssid-a','ssid':'Home-5G','password':'wifi-secret'}], 'custom_fields':[]}
+            value={'gui':{'username':'dns-admin','password':'gui-secret','fields':[]},'wifi_networks':[{'id':'ssid-a','ssid':'Home-5G','password':'wifi-secret'}], 'custom_fields':[], 'snmp':dict(CredentialVault.EMPTY['snmp']), 'ssh':dict(CredentialVault.EMPTY['ssh'])}
             self.assertEqual(self.request(path,'POST',{'credentials':value})[0],200)
             self.assertEqual(self.request(path)[1]['credentials'],value)
             for route in ('/api/platform','/api/platform/integrations','/api/devices','/api/services'):

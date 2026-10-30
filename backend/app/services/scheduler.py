@@ -81,6 +81,28 @@ class Scheduler:
                 log.exception('scheduler_cycle_failed')
             await asyncio.sleep(max(10,self.settings.poll_interval-(time.monotonic()-start)))
 
+    async def inventory_polling(self):
+        """Poll directly managed devices on their own configured cadence."""
+        from app.monitoring.inventory import scheduled
+        while True:
+            start=time.monotonic()
+            interval=self.settings.poll_interval
+            try:
+                devices=[]
+                for item in self.platform.list('inventory'):
+                    if not scheduled(item):continue
+                    target=self.platform.inventory_target(item)
+                    # API collectors bound to a shared RouterOS/Proxmox target are
+                    # polled by the global collector cycle. Direct adapters have an
+                    # independent target and honor this inventory item's interval.
+                    if target.startswith('inventory_'):devices.append((target,item['interval']))
+                if devices:
+                    await asyncio.gather(*(self.monitor.check(target) for target,_ in devices),return_exceptions=True)
+                    interval=min(value for _,value in devices)
+            except asyncio.CancelledError:raise
+            except Exception as exc:log.error('inventory_polling_failed category=%s',type(exc).__name__)
+            await asyncio.sleep(max(1,interval-(time.monotonic()-start)))
+
     async def device_backups(self):
         while True:
             try:

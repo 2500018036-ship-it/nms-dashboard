@@ -39,7 +39,7 @@ def check(row, saved, now, interval):
                          'collection_failed' if error else 'unavailable' if out['status'] == 'UNKNOWN' else out['status'].lower())
     out['answers'] = [text(a) for a in row.get('answers', [])[:8] if isinstance(a, str)] if isinstance(row.get('answers'), list) else []
     out['disks'] = rows(row.get('disks'), 'path,used_percent,total,used,free', 32)
-    out['interfaces'] = rows(row.get('interfaces'), 'name,type,running,disabled,status,rx_bps,tx_bps,capacity_bps,utilization_percent,sample_seconds,duplex,rx_bytes,tx_bytes,rx_errors,tx_errors,rx_drops,tx_drops,mtu', 200)
+    out['interfaces'] = rows(row.get('interfaces'), 'index,name,type,running,disabled,status,rx_bps,tx_bps,capacity_bps,utilization_percent,sample_seconds,duplex,rx_bytes,tx_bytes,rx_errors,tx_errors,rx_drops,tx_drops,mtu', 200)
     out['nodes'] = rows(row.get('nodes'), 'id,node,status,cpu,maxcpu,mem,maxmem,disk,maxdisk,uptime', 16)
     out['guests'] = rows(row.get('guests'), 'id,vmid,name,node,type,status,cpu,maxcpu,mem,maxmem,disk,maxdisk,uptime,netin,netout,diskread,diskwrite', 100)
     out['storage'] = rows(row.get('storage'), 'id,node,storage,status,disk,maxdisk', 50)
@@ -51,7 +51,10 @@ def check(row, saved, now, interval):
     allowed = {
         '/system/resource': 'uptime,version,board-name,architecture-name,cpu-load,cpu-count,cpu-frequency,total-memory,free-memory,total-hdd-space,free-hdd-space',
         '/system/identity': 'name', '/system/routerboard': 'model,routerboard',
-        '/interface': 'name,type,running,disabled,mtu,rx-byte,tx-byte,rx-packet,tx-packet,rx-error,tx-error,rx-drop,tx-drop',
+        '/interface': 'name,type,running,disabled,mtu,rx-byte,tx-byte,rx-packet,tx-packet,rx-error,tx-error,rx-drop,tx-drop,rx_bits_per_second,tx_bits_per_second,sample_seconds,rate_sample_valid',
+        '/interface/vlan': 'name,interface,vlan-id,disabled,running',
+        '/interface/wireless': 'name,ssid,mode,band,frequency,channel-width,running,disabled,signal-strength,noise-floor',
+        '/system/health': 'name,value,temperature,voltage,current,frequency',
         '/ip/neighbor': 'identity,address,interface,platform,version',
         '/ip/route': 'dst-address,gateway,active,disabled,distance,routing-table',
         '/interface/wireguard/peers': 'name,interface,disabled,last-handshake,rx,tx',
@@ -59,6 +62,7 @@ def check(row, saved, now, interval):
     raw = row.get('data') if isinstance(row.get('data'), dict) else {}
     for path, fields in allowed.items():
         if path in raw: out['data'][path] = rows(raw[path], fields)
+    if isinstance(row.get('system_info'),dict):out['system_info']=project(row['system_info'],'name,description,object_id,version,release')
     out['peers'] = rows(row.get('peers'), 'name,interface,disabled,last-handshake,handshake_age_seconds,rx,tx', 100)
     return out
 

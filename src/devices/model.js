@@ -1,5 +1,10 @@
 export const deviceTypes = ['router', 'switch', 'server', 'hypervisor', 'container-host', 'dns', 'vpn', 'service', 'access-point','firewall','iot','generic','other']
-export const methods = ['icmp', 'tcp', 'snmp', 'api', 'agent', 'http', 'dns']
+export const methods = ['icmp', 'tcp', 'snmp', 'ssh', 'api', 'agent', 'http', 'dns']
+export const monitorCategories = [
+  ['network_status','Status jaringan'],['latency','Latensi'],['system_information','Informasi sistem'],['cpu','CPU'],['memory','Memori'],
+  ['storage','Penyimpanan'],['interfaces','Interface'],['traffic','Counter trafik'],['bandwidth','Bandwidth'],['vlan','VLAN'],
+  ['routing','Routing'],['wireless','Nirkabel'],['temperature','Suhu'],['sensors','Sensor'],['virtualization','Virtualisasi'],['service_health','Kesehatan layanan'],
+]
 export const profiles = {
   connectivity: { label: 'Connectivity', metrics: ['Availability', 'Latensi', 'Packet loss jika tersedia'] },
   network: { label: 'Network interfaces', metrics: ['Interface', 'RX/TX', 'Utilisasi', 'Error/drop jika tersedia'] },
@@ -8,7 +13,7 @@ export const profiles = {
   services: { label: 'Service health', metrics: ['HTTP/DNS/API availability', 'Response time'] },
   custom: { label: 'Custom / capability-based', metrics: ['Metrik mengikuti kemampuan collector'] },
 }
-const allowed = new Set(['id', 'name', 'host', 'type', 'vendor', 'model', 'methods', 'interval', 'group', 'tags', 'profile', 'enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp'])
+const allowed = new Set(['id', 'name', 'host', 'type', 'vendor', 'model', 'methods', 'interval', 'group', 'tags', 'profile', 'enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp','monitor_categories'])
 const clean = (v) => typeof v === 'string' ? v.trim() : ''
 export class DeviceError extends Error {
   constructor(code, errors = {}) { super(code); this.code = code; this.errors = errors }
@@ -31,7 +36,7 @@ export function validateDevice(input, existing = [], editingId = null) {
     methods: Array.isArray(input.methods) ? [...new Set(input.methods)] : [],
     interval: typeof input.interval === 'number' || typeof input.interval === 'string' && /^\d+$/.test(input.interval) ? Number(input.interval) : NaN,
     group: clean(input.group), tags: Array.isArray(input.tags) ? [...new Set(input.tags.map(clean).filter(Boolean))] : [],
-    profile: input.profile, enabled: input.enabled ?? true,
+    profile: input.profile, enabled: input.enabled ?? true, monitor_categories: Array.isArray(input.monitor_categories) ? [...new Set(input.monitor_categories)] : ['network_status'],
   }
   if (value.id && !/^[\w-]{1,80}$/.test(value.id)) errors.id = 'ID tidak valid.'
   // eslint-disable-next-line no-control-regex -- Reject control characters in inventory names.
@@ -45,6 +50,7 @@ export function validateDevice(input, existing = [], editingId = null) {
   if (value.vendor.length > 80 || value.model.length > 80) errors.vendor = 'Vendor/model maksimum 80 karakter.'
   if (value.group.length > 48) errors.group = 'Grup maksimum 48 karakter.'
   if (value.tags.length > 10 || value.tags.some((t) => !/^[\w-]{1,32}$/.test(t))) errors.tags = 'Maksimum 10 tag, gunakan huruf, angka, _ atau - (32 karakter/tag).'
+  if (value.monitor_categories.length>16 || value.monitor_categories.some((c)=>!monitorCategories.some(([id])=>id===c))) errors.monitor_categories='Kategori monitoring tidak dikenal.'
   if (input.tags !== undefined && !Array.isArray(input.tags)) errors.tags = 'Tag harus berupa array.'
   if (Array.isArray(input.tags) && input.tags.some((v) => typeof v !== 'string')) errors.tags = 'Setiap tag harus berupa teks.'
   for (const key of ['id', 'vendor', 'model', 'group']) if (input[key] !== undefined && typeof input[key] !== 'string') errors[key] = 'Field harus berupa teks.'
@@ -60,7 +66,7 @@ export function validatedDevice(input, existing = [], editingId = null) {
   if (!result.value) throw new DeviceError('validation_failed', result.errors)
   return result.value
 }
-export const newDevice = () => ({ name: '', host: '', type: 'other', vendor: '', model: '', methods: ['icmp'], interval: 30, group: '', tags: [], profile: 'connectivity', enabled: true })
+export const newDevice = () => ({ name: '', host: '', type: 'other', vendor: '', model: '', methods: ['icmp'], interval: 30, group: '', tags: [], profile: 'connectivity', enabled: true, monitor_categories:['network_status'] })
 export function parseInventory(text, existing = []) {
   if (typeof text !== 'string' || new TextEncoder().encode(text).length > 262144) throw new DeviceError('import_too_large')
   let data
