@@ -6,6 +6,11 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY app ./app
 COPY network.json ./network.json
 COPY bot.py .
+# SSH resolves the local identity even when the remote username is explicit.
+# Keep the existing numeric UID/GID, with a locked OS account and no writable home.
+RUN groupadd --gid 10001 nms \
+    && useradd --uid 10001 --gid 10001 --no-create-home --home-dir /app --shell /usr/sbin/nologin nms
+ENV HOME=/app USER=nms LOGNAME=nms
 USER 10001:10001
 CMD ["python", "-u", "bot.py"]
 
