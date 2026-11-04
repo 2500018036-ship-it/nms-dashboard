@@ -6,6 +6,7 @@ import os
 from pathlib import Path
 import sqlite3
 import tempfile
+import threading
 import time
 import unittest
 from unittest.mock import AsyncMock,patch
@@ -95,6 +96,34 @@ class StandardPlatformTests(unittest.TestCase):
         self.assertEqual(len(self.store.list('inventory')),1)
         with open(target/'nms.sqlite3','ab') as stream:stream.write(b'tampered')
         with self.assertRaisesRegex(ValueError,'backup_integrity_failed'):verify(target)
+
+    def test_backup_reads_a_consistent_wal_snapshot_while_polling_writes(self):
+        live=Path(self.tmp.name)/'concurrent.sqlite3'
+        with closing(sqlite3.connect(live)) as db:
+            db.execute('PRAGMA journal_mode=WAL')
+            db.execute('CREATE TABLE samples(id INTEGER PRIMARY KEY,payload BLOB)')
+            db.executemany('INSERT INTO samples VALUES(?,?)',((i,b'x'*4096) for i in range(1000)))
+            db.execute('CREATE TABLE counter(value INTEGER)');db.execute('INSERT INTO counter VALUES(0)');db.commit()
+        stop=threading.Event();started=threading.Event();failures=[]
+        def polling():
+            try:
+                with closing(sqlite3.connect(live,timeout=10)) as db:
+                    while not stop.is_set():
+                        with db:db.execute('UPDATE counter SET value=value+1')
+                        started.set();stop.wait(.002)
+            except Exception as exc:failures.append(exc)
+        writer=threading.Thread(target=polling,daemon=True);writer.start()
+        try:
+            self.assertTrue(started.wait(5))
+            target=Path(self.tmp.name)/'operational-reset'/'live-polling'
+            manifest=prepare(self.tmp.name,target)
+            self.assertEqual(manifest['files']['concurrent.sqlite3']['sqlite_integrity'],'ok')
+            with closing(sqlite3.connect(target/'concurrent.sqlite3')) as saved:
+                self.assertEqual(saved.execute('SELECT COUNT(*) FROM samples').fetchone()[0],1000)
+                self.assertGreaterEqual(saved.execute('SELECT value FROM counter').fetchone()[0],1)
+        finally:
+            stop.set();writer.join(10)
+        self.assertFalse(writer.is_alive());self.assertEqual(failures,[])
 
     @unittest.skipIf(os.name=='nt','Offline singleton lock is Linux fcntl, verified by Docker/CI')
     def test_reset_on_fixture_preserves_accounts_settings_audit_and_stops_reseeding(self):

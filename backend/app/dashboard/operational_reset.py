@@ -48,7 +48,12 @@ def prepare(directory,destination):
         if path.is_symlink():raise ValueError('database_symlink_refused')
         output=backup/path.name
         with closing(sqlite3.connect(path.as_uri()+'?mode=ro',uri=True,timeout=10)) as source,closing(sqlite3.connect(output)) as target:
+            # Pin a WAL read snapshot: continuous polling must not restart a
+            # multi-step backup on every committed monitoring sample.
+            source.execute('BEGIN')
+            source.execute('SELECT name FROM sqlite_master LIMIT 1').fetchall()
             source.backup(target,pages=512,sleep=.01)
+            source.rollback()
             integrity=target.execute('PRAGMA integrity_check').fetchall()
             if integrity!=[('ok',)]:raise ValueError('backup_integrity_failed')
         output.chmod(0o600);manifest['files'][path.name]={'sha256':checksum(output),'bytes':output.stat().st_size,'sqlite_integrity':'ok'}
