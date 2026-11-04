@@ -6,8 +6,10 @@ import { createAssistantWorkspace } from './assistantWorkspace'
 
 export function AssistantProvider({ children }) {
   const { user } = useAuth()
-  const { client } = usePlatform()
-  const workspace = useMemo(() => createAssistantWorkspace({ client, username: user.username }), [client, user.username])
-  useEffect(() => workspace.start(), [workspace])
+  const { client,capabilities } = usePlatform()
+  const generation=capabilities.operational_generation
+  const owner=user.username+(generation&&generation!=='initial'?'.'+generation:'')
+  const workspace = useMemo(() => createAssistantWorkspace({ client, username: owner }), [client, owner])
+  useEffect(() => {if(generation!==undefined)return workspace.start()}, [workspace,generation])
   return <AssistantContext.Provider value={workspace}>{children}</AssistantContext.Provider>
 }

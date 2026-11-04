@@ -138,6 +138,7 @@ class CredentialVault:
             db.execute('''INSERT INTO credential_records(target_type,target_id,nonce,ciphertext,updated) VALUES(?,?,?,?,?)
                 ON CONFLICT(target_type,target_id) DO UPDATE SET nonce=excluded.nonce,ciphertext=excluded.ciphertext,updated=excluded.updated''',
                 (target_type, target_id, nonce, ciphertext, time.time()))
+            if target_type=='inventory' and db.execute("SELECT 1 FROM sqlite_master WHERE name='device_discoveries'").fetchone():db.execute('DELETE FROM device_discoveries WHERE inventory_id=?',(target_id,))
             self.store.audit(db, actor, 'credentials.update', f'{target_type}:{target_id}', f'fields:{count};wifi:{len(clean["wifi_networks"])}')
         return {'ok': True, 'updated_at': time.time()}
 

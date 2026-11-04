@@ -42,6 +42,7 @@ class Monitoring:
             'scope':'Collector yang belum disiapkan dipisahkan dari gangguan layanan. HTTP/TCP Proxmox tidak membuktikan VM sehat.'}
 
     async def check(self, target, force=False):
+        if self.platform.inventory_authoritative() and target not in self.platform.targets():return result(target,'inventory',error='target_not_allowed')
         if target in self.settings.targets:
             source=self.platform.source(target=target)
             item=self.platform.get('inventory',source[1]) if source else None
@@ -66,30 +67,43 @@ class Monitoring:
                     # RouterOS has its own 19-second request budget including lock
                     # wait; leave room for thread scheduling and SQLite bookkeeping.
                     router_target=target.startswith('mikrotik_') or target in {'wireguard','cisco_sf200'}
-                    async with asyncio.timeout(35 if device and device.get('follow_dhcp') else 25 if router_target else 20):
-                        value = await self._collect(target)
+                    async with asyncio.timeout(38 if device and device.get('monitor_method') in {'snmp','ssh'} else 35 if device and device.get('follow_dhcp') else 25 if router_target else 20):
+                        value = await self._collect(target,discovery=force)
                 except Exception as exc:
                     value = result(target,'collector',error=type(exc).__name__)
             if device:value['configuration_hash']=configuration
             self.metrics[value['status']] += 1
             self.cache[target] = (time.monotonic(), value)
             self.database.save(value)
+            if device:
+                from app.dashboard.discovery import save
+                save(self.platform,device,value,complete=force)
             return value
 
-    async def _collect(self, target):
+    async def _collect(self, target, discovery=False):
         if target.startswith('inventory_'):
             from app.monitoring.inventory import collect,scheduled
             item=self.platform.get('inventory',target.removeprefix('inventory_'))
             if not item or not scheduled(item):return result(target,'inventory',error='target_not_allowed')
             canonical=self.platform.inventory_target(item)
             if canonical!=target:return result(target,'inventory',error='use_shared_collector')
+            method=item.get('monitor_method')
+            if method in {'routeros','proxmox'}:
+                if self.platform.inventory_authoritative() and not self.platform.optional_api_approved(method,item['host']):return result(target,'API optional',error='optional_api_approval_required')
+                if method=='proxmox':value=await proxmox.collect()
+                else:
+                    system=await self.router.collect('system');interfaces=await self.router.collect('interfaces')
+                    value={**system,'data':{**system.get('data',{}),**interfaces.get('data',{})}}
+                return {**value,'target':target,'host':item['host'],'display_name':item['name']}
             previous=self.database.history(target,1)
             try:credentials=self.credentials.collector_credentials('inventory',item['id']) if item.get('monitor_method') in {'snmp','ssh'} else None
             except Exception as exc:
                 from app.dashboard.credentials import CredentialVaultUnavailable
                 if isinstance(exc,CredentialVaultUnavailable):return result(target,item.get('monitor_method','SNMP').upper(),error='credential_vault_unavailable')
                 raise
-            value=await self.icmp_device(target,item) if item.get('monitor_method')=='icmp' else await collect(item,self.platform.get_settings()['value']['allowed_hosts'],credentials,previous[0] if previous else None)
+            from app.dashboard.discovery import read
+            discover=discovery or not read(self.platform,item)
+            value=await self.icmp_device(target,item) if item.get('monitor_method')=='icmp' else await collect(item,self.platform.get_settings()['value']['allowed_hosts'],credentials,previous[0] if previous else None,discovery=discover)
             return {**value,'configuration_hash':hashlib.sha256(json.dumps(item,sort_keys=True).encode()).hexdigest()}
         if target.startswith('service_'):
             service=self.platform.get('integrations',target.removeprefix('service_'))
@@ -167,7 +181,7 @@ class Monitoring:
         inventory=[self.platform.inventory_target(d) for d in self.platform.list('inventory') if scheduled(d)]
         inventory=[t for t in inventory if t.startswith('inventory_')]
         configured=[]
-        for key in self.settings.targets:
+        for key in (self.settings.targets if not self.platform.inventory_authoritative() else ()):
             source=self.platform.source(target=key)
             item=self.platform.get('inventory',source[1]) if source else None
             if not source or item and item['enabled']:configured.append(key)
@@ -176,8 +190,9 @@ class Monitoring:
             if state.get('active') and (key.startswith(('service_','inventory_')) and key.split(':',1)[0] not in services+inventory or key.split(':',1)[0] in retired or any(key=='network:device:'+target for target in retired)):
                 state.update(active=False,retired=True);state.pop('pending',None);self.database.set_state(key,state)
                 self.database.event(key,'RETIRED',{'reason':'integration_disabled_or_removed'})
-        targets = list(dict.fromkeys(inventory+services+configured+['mikrotik_system','mikrotik_interfaces','proxmox_resources','docker','debian']+self.extra_targets))
-        router_targets = ['mikrotik_system','mikrotik_interfaces']+[t for t in self.extra_targets if t!='network_traffic']
+        legacy=[] if self.platform.inventory_authoritative() else ['mikrotik_system','mikrotik_interfaces','proxmox_resources','docker','debian']+self.extra_targets
+        targets = list(dict.fromkeys(inventory+services+configured+legacy))
+        router_targets = [t for t in targets if t.startswith('mikrotik_') or t in {'wireguard','cisco_sf200'}]
         other_targets = [t for t in targets if t not in router_targets]
         async def router_sequence():
             # Each check gets its own timeout after the previous router check.
@@ -236,6 +251,10 @@ class Monitoring:
         return summary
 
     def register(self, registry):
+        async def optional_router_query(**kwargs):
+            host=os.getenv('MIKROTIK_HOST','192.168.20.1')
+            if self.platform.inventory_authoritative() and not self.platform.optional_api_approved('routeros',host):return result('mikrotik','API optional',error='optional_api_approval_required')
+            return await self.router.query(**kwargs)
         router_schema={'type':'object','properties':{
             'section':{'type':'string','enum':list(SECTIONS)},
             'offset':{'type':'integer','minimum':0,'maximum':499},
@@ -252,7 +271,7 @@ class Monitoring:
             'dst-address/gateway/active untuk routes, chain/action untuk firewall. '
             'Maksimal 10 baris; lanjut dengan next_offset jika has_more. Jangan klaim lengkap jika masih ada halaman. '
             'Data tambahan tidak berarti fitur itu tersedia; UNKNOWN/unsupported harus dijelaskan. '
-            'Tidak tersedia password, config export, script, shell atau perubahan router.',router_schema,self.router.query))
+            'Tidak tersedia password, config export, script, shell atau perubahan router.',router_schema,optional_router_query))
         targets=list(self.settings.targets)+['mikrotik_system','mikrotik_interfaces','mikrotik_network','mikrotik_vlan','proxmox_resources','docker','debian']+self.extra_targets
         schema={'type':'object','properties':{'target':{'type':'string','enum':targets}},'required':['target'],'additionalProperties':False}
         registry.add(Tool('check_service','Periksa layanan aktual: DNS query, HTTP TLS, MikroTik CPU/RAM/interface, VM Proxmox, container Docker atau resource Debian. Pilih ID sesuai pertanyaan.',schema,self.check))
@@ -283,5 +302,6 @@ class Monitoring:
                 'limit':{'type':'integer','minimum':1,'maximum':30}},'additionalProperties':False},get_incidents))
         legacy={'mikrotik':('192.168.20.1',8291),'technitium_dns':('192.168.20.199',53),'proxmox':('192.168.20.200',8006),'debian_ssh':('192.168.20.195',22),'web_http':('192.168.20.195',80),'web_https':('192.168.20.195',443)}
         async def check_tcp_endpoint(target):
+            if self.platform.inventory_authoritative():return result(target,'inventory',error='target_not_allowed')
             return await tcp.probe(target,*legacy[target])
         registry.add(Tool('check_tcp_endpoint','Uji keterjangkauan TCP endpoint lama. Hasil bukan kesehatan aplikasi.',{'type':'object','properties':{'target':{'type':'string','enum':list(legacy)}},'required':['target'],'additionalProperties':False},check_tcp_endpoint))

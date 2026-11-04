@@ -29,6 +29,7 @@ class Dashboard:
         self.sessions = Sessions(settings.data_dir, settings.dashboard_password)
 
     def allowed_targets(self):
+        if self.platform.store.inventory_authoritative():return self.platform.store.targets()
         return self.platform.store.targets() | set(self.settings.targets) | {'debian', 'docker', 'mikrotik_system', 'mikrotik_interfaces',
             'proxmox_resources', 'wireguard', 'cisco_sf200', 'mikrotik_routes', 'network_traffic', 'mikrotik_network', 'mikrotik_vlan'}
 
@@ -36,12 +37,14 @@ class Dashboard:
         now = time.time()
         stored = db.execute('SELECT ts,payload FROM checks WHERE id IN (SELECT MAX(id) FROM checks GROUP BY target) ORDER BY target LIMIT 100').fetchall()
         service_intervals={'service_'+r['id']:r['poll_interval'] for r in self.platform.store.list('integrations') if r['enabled'] and r['monitor_enabled']}
-        service_intervals.update({'inventory_'+r['id']:max(30,r['interval']) for r in self.platform.store.list('inventory') if r['enabled'] and r.get('monitor_method') in {'icmp','tcp','http','dns'}})
+        service_intervals.update({'inventory_'+r['id']:r['interval'] for r in self.platform.store.list('inventory') if r['enabled'] and r.get('monitor_method') in {'icmp','tcp','http','dns','snmp','ssh','routeros','proxmox'}})
         checks=[]
+        authoritative=self.platform.store.inventory_authoritative();allowed=self.platform.store.targets() if authoritative else set()
         for ts,payload in stored:
             value=json.loads(payload);target=value.get('target','')
+            if authoritative and target not in allowed:continue
             if target.startswith(('service_','inventory_')) and target not in service_intervals:continue
-            checks.append(projection.check(value,ts,now,max(self.settings.poll_interval,service_intervals.get(target,0))))
+            checks.append(projection.check(value,ts,now,service_intervals.get(target,self.settings.poll_interval)))
         states = []
         for key, payload in db.execute('SELECT key,payload FROM alert_state LIMIT 500'):
             value = json.loads(payload)
@@ -95,7 +98,7 @@ class Dashboard:
         with closing(sqlite3.connect(db_path.as_uri() + '?mode=ro', uri=True, timeout=3)) as db:
             if journal_path:
                 db.execute('BEGIN')
-                journal = Journal(db)
+                journal = Journal(db,self.platform.store)
                 if path == '/api/logs': return journal.logs(query)
                 if path == '/api/incidents':
                     response=journal.incidents(query);notes=self.platform.store.annotations()

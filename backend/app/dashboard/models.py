@@ -74,7 +74,7 @@ def record(collection, body, allowed_hosts=(), targets=()):
         return {'name':text(body['name'],1,80),'url':url(body['url'],allowed_hosts),'kind':kind,'group':text(body.get('group',''),0,48),'enabled':enabled,
             'monitor_enabled':monitored,'poll_interval':integer(body.get('poll_interval',60),60,3600),'collector':collector,'authentication':auth}
     if collection == 'inventory':
-        fields(body, ('name','host','type','vendor','model','methods','interval','group','tags','profile','enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp','monitor_categories'), ('name','host','type','methods','interval','profile','enabled'))
+        fields(body, ('name','host','type','vendor','model','firmware','parent_id','component_kind','component_ref','dashboard_url','methods','interval','group','tags','profile','enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp','monitor_categories'), ('name','host','type','methods','interval','profile','enabled'))
         methods = body['methods']; tags = body.get('tags', [])
         if not isinstance(methods,list) or not methods or len(methods)>6 or any(v not in {'icmp','tcp','snmp','ssh','api','dns','http','agent'} for v in methods): raise ValueError('invalid_methods')
         if body['type'] not in {'router','switch','server','hypervisor','container-host','dns','vpn','service','access-point','firewall','iot','generic','other'}: raise ValueError('invalid_type')
@@ -104,7 +104,16 @@ def record(collection, body, allowed_hosts=(), targets=()):
         follow=boolean(body.get('follow_dhcp',False))
         if mac and not re.fullmatch(r'(?:[0-9A-F]{2}:){5}[0-9A-F]{2}',mac):raise ValueError('invalid_mac_address')
         if follow and (not mac or method!='icmp'):raise ValueError('invalid_dhcp_tracking')
+        parent=text(body.get('parent_id',''),0,80)
+        if parent and not re.fullmatch(r'inv_[a-f0-9]{24}',parent):raise ValueError('invalid_parent')
+        component=body.get('component_kind','physical')
+        if component not in {'physical','os','vm','container','application','service','storage'}:raise ValueError('invalid_component_kind')
+        if component=='physical' and parent:raise ValueError('invalid_parent')
+        if component!='physical' and not parent:raise ValueError('parent_required')
+        dashboard=text(body.get('dashboard_url',''),0,500)
+        if dashboard:dashboard=url(dashboard,allowed_hosts)
         return {'name':text(body['name'],1,80),'host':address,'type':body['type'],'vendor':text(body.get('vendor',''),0,80),'model':text(body.get('model',''),0,80),
+            'firmware':text(body.get('firmware',''),0,80),'component_ref':text(body.get('component_ref',''),0,120),'parent_id':parent,'component_kind':component,'dashboard_url':dashboard,
             'methods':list(dict.fromkeys(methods)),'interval':integer(body['interval'],15,86400),'group':text(body.get('group',''),0,48),
             'tags':list(dict.fromkeys(text(t,1,32) for t in tags)),'profile':body['profile'],'enabled':boolean(body['enabled']),
             'location':text(body.get('location',''),0,80),'role':text(body.get('role',''),0,80),'hostname':text(body.get('hostname',''),0,253),
@@ -160,5 +169,5 @@ def record(collection, body, allowed_hosts=(), targets=()):
 
 
 def public_validation_code(exc):
-    known={'host_not_allowed','invalid_mac_address','invalid_dhcp_tracking','duplicate_host','referenced_by_topology','monitor_limit','invalid_monitor_method','credential_host_mismatch','literal_ipv4_required','invalid_host','invalid_number','invalid_fields','invalid_methods','invalid_profile','invalid_type','invalid_text','url_host_mismatch','invalid_service_url','invalid_dns_query','backup_unsupported','backup_busy','backup_unavailable','backup_integrity_failed','backup_device_mismatch','restore_confirmation_required','readonly_account_required','verified_api_ssl_required','permission_denied','authentication_failed','timeout','connection_failed','collector_busy','empty_backup','backup_too_large','sensitive_data_detected','invalid_monitor_categories','unsupported_monitor_category','missing_snmp_credentials','unsupported_auth_protocol','snmp_agent_error','snmp_identity_unavailable','snmp_request_failed'}
+    known={'host_not_allowed','invalid_mac_address','invalid_dhcp_tracking','duplicate_host','referenced_by_topology','monitor_limit','invalid_monitor_method','credential_host_mismatch','literal_ipv4_required','invalid_host','invalid_number','invalid_fields','invalid_methods','invalid_profile','invalid_type','invalid_text','url_host_mismatch','invalid_service_url','invalid_dns_query','backup_unsupported','backup_busy','backup_unavailable','backup_integrity_failed','backup_device_mismatch','restore_confirmation_required','readonly_account_required','verified_api_ssl_required','permission_denied','authentication_failed','timeout','connection_failed','collector_busy','empty_backup','backup_too_large','sensitive_data_detected','invalid_monitor_categories','unsupported_monitor_category','missing_snmp_credentials','unsupported_auth_protocol','snmp_agent_error','snmp_identity_unavailable','snmp_request_failed','parent_required','invalid_parent','invalid_component_kind','parent_has_components','optional_api_approval_required','invalid_bot_token','user_confirmation_required','account_unavailable','telegram_not_configured'}
     return str(exc) if str(exc) in known else 'validation_failed'

@@ -78,7 +78,7 @@ class PlatformStoreTests(unittest.TestCase):
         login=sessions.login('admin','admin-test-'+'A'*30);self.assertEqual(login[1]['user']['role'],'Administrator')
         self.store.save_user(dict(username='operator1',name='Operator',role='Operator',enabled=True,password='test-only-'+'C'*30),'admin')
         userlogin=sessions.login('operator1','test-only-'+'C'*30);self.assertIsNotNone(sessions.read(userlogin[0]))
-        self.store.save_user(dict(username='operator1',name='Operator',role='Read-only operator',enabled=False,revision=1),'admin')
+        self.store.save_user(dict(username='operator1',name='Operator',role='Read-only operator',enabled=False,revision=1,confirmation='operator1'),'admin')
         self.assertIsNone(sessions.read(userlogin[0]))
         self.assertNotIn('test-only-',json.dumps(self.store.users()))
         with self.store.db() as db:
@@ -129,7 +129,7 @@ class PlatformAPITests(unittest.TestCase):
         code,_,headers=self.request('/api/auth/login','POST',dict(username='admin',password='test-admin-'+'X'*30))
         self.assertEqual(code,200);self.cookie=headers['Set-Cookie'].split(';')[0]
     def test_network_admin_config_scope_cannot_cross_into_security_or_server_writes(self):
-        self.server.platform.store.save_user(dict(username='netadmin',name='Network Admin',role='Network Administrator',enabled=True,password='test-only-'+'N'*30),'admin')
+        self.server.platform.store.save_user(dict(username='netadmin',name='Network Admin',role='Network Administrator',enabled=True,confirmation='netadmin',password='test-only-'+'N'*30),'admin')
         code,_,headers=self.request('/api/auth/login','POST',dict(username='netadmin',password='test-only-'+'N'*30))
         self.assertEqual(code,200);self.cookie=headers['Set-Cookie'].split(';')[0]
         value=dict(name='Router',host='192.168.20.1',type='router',methods=['api'],interval=60,profile='network',enabled=True)

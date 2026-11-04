@@ -39,6 +39,10 @@ def check(row, saved, now, interval):
                          'collection_failed' if error else 'unavailable' if out['status'] == 'UNKNOWN' else out['status'].lower())
     out['answers'] = [text(a) for a in row.get('answers', [])[:8] if isinstance(a, str)] if isinstance(row.get('answers'), list) else []
     out['disks'] = rows(row.get('disks'), 'path,used_percent,total,used,free', 32)
+    out['vlans']=rows(row.get('vlans'),'name,vlan-id,interface,disabled',128)
+    out['routes']=rows(row.get('routes'),'dst-address,gateway,active,distance,routing-table',64)
+    out['sensors']=rows(row.get('sensors'),'name,value,unit',32)
+    if type(row.get('temperature')) in (int,float) and math.isfinite(row['temperature']):out['temperature']=row['temperature']
     out['interfaces'] = rows(row.get('interfaces'), 'index,name,type,running,disabled,status,rx_bps,tx_bps,capacity_bps,utilization_percent,sample_seconds,duplex,rx_bytes,tx_bytes,rx_errors,tx_errors,rx_drops,tx_drops,mtu', 200)
     out['nodes'] = rows(row.get('nodes'), 'id,node,status,cpu,maxcpu,mem,maxmem,disk,maxdisk,uptime', 16)
     out['guests'] = rows(row.get('guests'), 'id,vmid,name,node,type,status,cpu,maxcpu,mem,maxmem,disk,maxdisk,uptime,netin,netout,diskread,diskwrite', 100)

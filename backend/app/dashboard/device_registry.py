@@ -7,7 +7,7 @@ from urllib.parse import urlsplit
 
 
 def sync(store):
-    if not store.config:
+    if not store.config or store.inventory_authoritative():
         return
     grouped = {}
     for target, spec in store.config.targets.items():

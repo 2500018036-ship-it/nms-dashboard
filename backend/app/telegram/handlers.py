@@ -38,6 +38,10 @@ class Handlers:
 
     def allowed(self,update):
         user=update.effective_user
+        if self.monitor and getattr(self.monitor,'platform',None):
+            from app.telegram.control import TelegramControl
+            account=TelegramControl(self.monitor.platform,self.settings).user(user.id) if user else None
+            return bool(account and update.effective_chat and update.effective_chat.type=='private')
         # Restrict to private chats too: avoid leaking monitoring in an authorized user's group.
         return bool(user and user.id in self.settings.allowed_ids and update.effective_chat and update.effective_chat.type=='private')
 
@@ -97,6 +101,8 @@ class Handlers:
 
     async def mikrotik(self,update,context):
         if not await self.guard(update):return
+        if getattr(self.monitor,'platform',None) and self.monitor.platform.inventory_authoritative():
+            await self.deliver(update.effective_message,'Monitoring menggunakan inventaris dan protokol standar. Gunakan /devices atau /status; API RouterOS opsional belum disetujui.');return
         try:
             query=mikrotik_args(context.args)
         except ValueError:

@@ -23,7 +23,7 @@ export default defineConfig(({ mode }) => {
     server: {
       host: '127.0.0.1', port: 5173, strictPort: true,
       proxy: target ? { [config.base]: {
-        target, changeOrigin: true, secure: true, timeout: 10000, proxyTimeout: 10000,
+        target, changeOrigin: true, secure: true, timeout: 45000, proxyTimeout: 45000,
         rewrite: (path) => path.slice(config.base.length),
         configure(proxy) {
           proxy.on('proxyReq', (request, incoming) => {

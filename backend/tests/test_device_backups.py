@@ -28,6 +28,7 @@ class DeviceConfigBackupsTests(unittest.IsolatedAsyncioTestCase):
         self.database = Database(self.tmp.name)
         self.monitor = Monitoring(self.cfg, self.database)
         self.backups: DeviceConfigBackups = self.monitor.device_backups
+        self.monitor.platform.approve_optional_api({'method':'routeros','host':'192.168.20.1','reason':'Read-only export backup not available through SNMP.','confirmation':'SETUJUI API 192.168.20.1'},'admin')
         self.device = self.monitor.platform.save('inventory', {'value': router_inventory()}, 'admin')
         self.export = AsyncMock(return_value='/system identity\nset name=router')
         self.monitor.router.export_configuration = self.export

@@ -13,8 +13,9 @@ export function adaptEvidence(v) {
 }
 export function adaptIncident(v) {
   if (!record(v) || !incidentIdValid(v.id)) throw new ApiError('invalid_response')
-  return { id: v.id, key: text(v.key), title: text(v.title), device: text(v.device), status: status(v.status), severity: severity(v.severity),
+  return { id: v.id, key: text(v.key), title: text(v.description||v.title), device: text(v.display_name||v.device), status: status(v.status), severity: severity(v.severity),
     firstSeen: finite(v.first_seen), updatedAt: finite(v.updated_at), lastObservedAt: finite(v.last_observed_at), resolvedAt: finite(v.resolved_at),
+    component:text(v.component,''),parentName:text(v.parent_name,''),location:text(v.location,''),duration:finite(v.duration_seconds),recommendations:Array.isArray(v.recommendations)?v.recommendations.filter((x)=>typeof x==='string').map((x)=>text(x)):[],nameResolved:v.name_resolved===true,
     partialHistory: v.partial_history === true, evidence: adaptEvidence(v.evidence),
     delivery: { status: text(v.delivery?.status, 'not_queued'), attempts: finite(v.delivery?.attempts), lastAttempt: finite(v.delivery?.last_attempt) },
     acknowledgment: record(v.acknowledgment) && typeof v.acknowledgment.actor === 'string' ? { actor:text(v.acknowledgment.actor), at:finite(v.acknowledgment.at), note:text(v.acknowledgment.note,'') } : null,

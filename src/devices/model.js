@@ -1,5 +1,5 @@
 export const deviceTypes = ['router', 'switch', 'server', 'hypervisor', 'container-host', 'dns', 'vpn', 'service', 'access-point','firewall','iot','generic','other']
-export const methods = ['icmp', 'tcp', 'snmp', 'ssh', 'api', 'agent', 'http', 'dns']
+export const methods = ['snmp', 'ssh', 'icmp', 'tcp', 'http', 'dns', 'api', 'agent']
 export const monitorCategories = [
   ['network_status','Status jaringan'],['latency','Latensi'],['system_information','Informasi sistem'],['cpu','CPU'],['memory','Memori'],
   ['storage','Penyimpanan'],['interfaces','Interface'],['traffic','Counter trafik'],['bandwidth','Bandwidth'],['vlan','VLAN'],
@@ -13,7 +13,7 @@ export const profiles = {
   services: { label: 'Service health', metrics: ['HTTP/DNS/API availability', 'Response time'] },
   custom: { label: 'Custom / capability-based', metrics: ['Metrik mengikuti kemampuan collector'] },
 }
-const allowed = new Set(['id', 'name', 'host', 'type', 'vendor', 'model', 'methods', 'interval', 'group', 'tags', 'profile', 'enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp','monitor_categories'])
+const allowed = new Set(['id', 'name', 'host', 'type', 'vendor', 'model', 'firmware', 'parent_id', 'component_kind', 'component_ref', 'dashboard_url', 'methods', 'interval', 'group', 'tags', 'profile', 'enabled','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp','monitor_categories'])
 const clean = (v) => typeof v === 'string' ? v.trim() : ''
 export class DeviceError extends Error {
   constructor(code, errors = {}) { super(code); this.code = code; this.errors = errors }
@@ -42,7 +42,7 @@ export function validateDevice(input, existing = [], editingId = null) {
   // eslint-disable-next-line no-control-regex -- Reject control characters in inventory names.
   if (!value.name || value.name.length > 80 || /[\u0000-\u001f]/.test(value.name)) errors.name = 'Nama wajib diisi, maksimum 80 karakter.'
   if (!validHost(value.host)) errors.host = 'Gunakan IPv4, IPv6, atau hostname tanpa URL, port, dan credential.'
-  if (existing.some((d) => d.id !== editingId && d.host === value.host)) errors.host = 'Alamat sudah digunakan oleh perangkat lain.'
+  if (existing.some((d) => d.id !== editingId && d.host === value.host && !input.parent_id && !d.parent_id)) errors.host = 'Alamat sudah digunakan oleh perangkat lain.'
   if (!deviceTypes.includes(value.type)) errors.type = 'Pilih tipe perangkat.'
   if (!value.methods.length || value.methods.some((m) => !methods.includes(m))) errors.methods = 'Pilih minimal satu metode monitoring yang tersedia.'
   if (!Number.isInteger(value.interval) || value.interval < 15 || value.interval > 86400) errors.interval = 'Interval harus bilangan bulat 15–86400 detik.'
@@ -55,7 +55,7 @@ export function validateDevice(input, existing = [], editingId = null) {
   if (Array.isArray(input.tags) && input.tags.some((v) => typeof v !== 'string')) errors.tags = 'Setiap tag harus berupa teks.'
   for (const key of ['id', 'vendor', 'model', 'group']) if (input[key] !== undefined && typeof input[key] !== 'string') errors[key] = 'Field harus berupa teks.'
   if (input.enabled !== undefined && typeof input.enabled !== 'boolean') errors.enabled = 'Status aktif harus boolean.'
-  for(const key of ['location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp']) if(input[key]!==undefined)value[key]=input[key]
+  for(const key of ['firmware','parent_id','component_kind','component_ref','dashboard_url','location','role','hostname','credential_ref','monitor_method','monitor_port','monitor_url','dns_query','mac_address','follow_dhcp']) if(input[key]!==undefined)value[key]=input[key]
   if (value.mac_address !== undefined && (typeof value.mac_address !== 'string' || value.mac_address && !/^(?:[0-9a-f]{2}:){5}[0-9a-f]{2}$/i.test(value.mac_address))) errors.mac_address = 'Gunakan MAC dengan format AA:BB:CC:DD:EE:FF.'
   if (value.follow_dhcp !== undefined && typeof value.follow_dhcp !== 'boolean') errors.follow_dhcp = 'Pilihan DHCP tidak valid.'
   if (value.follow_dhcp && (!value.mac_address || value.monitor_method !== 'icmp')) errors.mac_address = 'Pelacakan DHCP memerlukan MAC dan metode ICMP.'
@@ -66,7 +66,7 @@ export function validatedDevice(input, existing = [], editingId = null) {
   if (!result.value) throw new DeviceError('validation_failed', result.errors)
   return result.value
 }
-export const newDevice = () => ({ name: '', host: '', type: 'other', vendor: '', model: '', methods: ['icmp'], interval: 30, group: '', tags: [], profile: 'connectivity', enabled: true, monitor_categories:['network_status'] })
+export const newDevice = () => ({ name: '', host: '', type: 'other', vendor: '', model: '', firmware:'',parent_id:'',component_kind:'physical',component_ref:'',dashboard_url:'', methods: ['icmp'], interval: 30, group: '', tags: [], profile: 'connectivity', enabled: true, monitor_categories:['network_status'] })
 export function parseInventory(text, existing = []) {
   if (typeof text !== 'string' || new TextEncoder().encode(text).length > 262144) throw new DeviceError('import_too_large')
   let data

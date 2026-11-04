@@ -25,6 +25,8 @@ class PlatformAPI:
         self.jobs={};self.job_lock=threading.Lock();self.questions=deque();self.probes=deque()
         from app.dashboard.assistant_history import AssistantHistory
         self.assistant_history=AssistantHistory(self.store)
+        from app.telegram.control import TelegramControl
+        self.telegram=TelegramControl(self.store,owner.settings)
 
     @staticmethod
     def permitted(session, roles):
@@ -33,6 +35,23 @@ class PlatformAPI:
         return session['user']['username']
 
     def get(self,path,query,session):
+        if path=='/api/platform/reset-plan':
+            from app.dashboard.permissions import require
+            require(session,'config.manage')
+            if query:raise ValueError('invalid_query')
+            from app.dashboard.operational_reset import plan
+            return plan(self.store.path.parent)
+        if path=='/api/platform/telegram':
+            from app.dashboard.permissions import require
+            require(session,'users.manage')
+            if query:raise ValueError('invalid_query')
+            return self.telegram.public()
+        if path=='/api/platform/server-hierarchy':
+            from app.dashboard.permissions import require
+            require(session,'monitor.read')
+            if query:raise ValueError('invalid_query')
+            from app.dashboard.hierarchy import hierarchy
+            return hierarchy(self.store,self.inventory_status)
         if path=='/api/platform/assistant-history':
             if set(query)-{'before'} or any(len(v)!=1 for v in query.values()):raise ValueError('invalid_query')
             before=query.get('before',[None])[0]
@@ -55,7 +74,8 @@ class PlatformAPI:
             if query:raise ValueError('invalid_query')
             from app.dashboard.permissions import permissions
             import os
-            return {'permissions':sorted(permissions(session)),
+            return {'permissions':sorted(permissions(session)), 'poller_address':os.getenv('NMS_POLLER_ADDRESS','192.168.20.195'),
+                'optional_methods':[{'id':method,'label':label,'host':host,'detail':'API opsional disetujui untuk metrik khusus; kredensial baca-saja tetap diverifikasi.'} for method,label,host in [('routeros','RouterOS API (opsional)',os.getenv('MIKROTIK_HOST','192.168.20.1')),('proxmox','Proxmox API (opsional)',os.getenv('PROXMOX_HOST','192.168.20.200'))] if self.store.optional_api_approved(method,host)],
                 'routeros_sections':[{'id':key,'label':spec.title} for key,spec in __import__('app.monitoring.mikrotik_catalog',fromlist=['SECTIONS']).SECTIONS.items()],
                 'credential_profiles':[{'id':'routeros-default','kind':'routeros','host':os.getenv('MIKROTIK_HOST','192.168.20.1'),'configured':bool(os.getenv('MIKROTIK_USER') and os.getenv('MIKROTIK_PASSWORD'))},
                     {'id':'proxmox-default','kind':'proxmox','host':os.getenv('PROXMOX_HOST','192.168.20.200'),'configured':bool(os.getenv('PROXMOX_TOKEN_ID') and os.getenv('PROXMOX_TOKEN_SECRET'))}],
@@ -97,6 +117,7 @@ class PlatformAPI:
         if path=='/api/platform':
             from app.dashboard.permissions import permissions
             return {'capabilities':{'manage':bool(session and session['user']['role'] in {'Administrator','Super Administrator'}),
+                'operational_generation':self.store.operational_generation(),
                 'acknowledge':'incidents.manage' in permissions(session),'assistant':bool(self.agent and self.loop),
                 'device_enrollment':True,'discovery':'cached-observations','embedding':'header-checked-sandbox','device_actions':'native-gui-only','permissions':sorted(permissions(session)),
                 'inventory_targets':{r['id']:self.store.inventory_target(r) for r in self.store.list('inventory')}},
@@ -142,6 +163,35 @@ class PlatformAPI:
         return items
 
     def post(self,path,body,session):
+        if path=='/api/platform/optional-api-approval':
+            from app.dashboard.permissions import require
+            return self.store.approve_optional_api(body,require(session,'config.manage'))
+        if path in {'/api/platform/telegram','/api/platform/telegram/bindings','/api/platform/telegram/test'}:
+            from app.dashboard.permissions import require
+            actor=require(session,'users.manage')
+            if path.endswith('/bindings'):return self.telegram.binding(body,actor)
+            if path.endswith('/test'):
+                if body:raise ValueError('invalid_fields')
+                self.store.log(actor,'telegram.test','telegram');return asyncio.run(self.telegram.test())
+            return self.telegram.settings(body,actor)
+        if path=='/api/platform/users/delete':
+            from app.dashboard.permissions import require
+            actor=require(session,'users.manage')
+            return self.store.delete_user(body,actor)
+        if path=='/api/platform/portal/test':
+            from app.dashboard.permissions import require
+            actor=require(session,'gui.access')
+            models.fields(body,('target',),('target',))
+            from app.dashboard.portal import entries,verify
+            item=next((r for r in entries(self.store) if r['id']==body['target']),None)
+            if not item:raise Missing()
+            with self.job_lock:
+                now=time.time()
+                while self.probes and now-self.probes[0]>60:self.probes.popleft()
+                if len(self.probes)>=5:raise ValueError('probe_rate_limit')
+                self.probes.append(now)
+            self.store.log(actor,'portal.test',item['id'])
+            return asyncio.run(verify(self.store,item))
         if path=='/api/platform/topology-verify':
             from app.dashboard.permissions import require
             from app.dashboard.projection import check
@@ -295,7 +345,7 @@ class PlatformAPI:
         target=self.store.inventory_target(item)
         targets=[target] if target else []
         source=self.store.source(identity=item['id'])
-        if source and source[0]==item['host']:
+        if source and source[0]==item['host'] and not self.store.inventory_authoritative() and item.get('component_kind','physical')=='physical':
             import os
             from urllib.parse import urlsplit
             for key in json.loads(source[3]):
@@ -317,7 +367,16 @@ class PlatformAPI:
                 if key in by_target:
                     ts,payload=by_target[key]
                     samples[key]=check(json.loads(payload),ts,time.time(),item['interval'] if key==target else self.owner.settings.poll_interval)
-        return summarize(item,target,samples)
+        value=summarize(item,target,samples)
+        from app.dashboard.discovery import read
+        discovered=read(self.store,item)
+        if discovered:
+            from app.monitoring.device_capabilities import CATEGORIES
+            value['supported_categories']=[c for c in CATEGORIES if c in set(discovered['categories'])|set(value['supported_categories'])]
+            value['enabled_categories']=[c for c in value['supported_categories'] if c in item.get('monitor_categories',value['supported_categories'])]
+            value['discovery_at']=discovered['observed_at']
+        value['parent_id']=item.get('parent_id','');value['component_kind']=item.get('component_kind','physical')
+        return value
 
     def validate_monitor_categories(self,value,identity=None):
         if not isinstance(value,dict) or 'monitor_categories' not in value or not identity:return
@@ -354,7 +413,7 @@ class PlatformAPI:
                 return await collect(item,self.store.get_settings()['value']['allowed_hosts'],creds,previous[0] if previous else None)
             return await self.monitor.check(target,force=True)
         future=asyncio.run_coroutine_threadsafe(test(),self.loop)
-        try:value=future.result(timeout=35 if item.get('follow_dhcp') or item.get('monitor_method') in {'snmp','ssh'} else 6)
+        try:value=future.result(timeout=40 if item.get('follow_dhcp') or item.get('monitor_method') in {'snmp','ssh'} else 6)
         except concurrent.futures.TimeoutError:
             future.cancel();return {'status':'UNKNOWN','error':'test_timeout'}
         from app.dashboard.projection import check

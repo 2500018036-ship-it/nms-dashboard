@@ -59,6 +59,29 @@ class Platform:
         from app.dashboard.device_registry import sync
         sync(self)
 
+    def inventory_authoritative(self):
+        with self.db() as db:
+            row=db.execute("SELECT value FROM platform_metadata WHERE key='inventory_authoritative'").fetchone()
+        return bool(row and row[0]=='1')
+
+    def operational_generation(self):
+        with self.db() as db:row=db.execute("SELECT value FROM platform_metadata WHERE key='operational_generation'").fetchone()
+        return row[0] if row else 'initial'
+
+    def approve_optional_api(self,body,actor):
+        models.fields(body,('method','host','reason','confirmation'),('method','host','reason','confirmation'))
+        method=body['method'];address=models.host(body['host']);reason=models.text(body['reason'],20,500)
+        if method not in {'routeros','proxmox'} or body['confirmation']!='SETUJUI API '+address:raise ValueError('optional_api_approval_required')
+        configured=os.getenv('MIKROTIK_HOST','192.168.20.1') if method=='routeros' else os.getenv('PROXMOX_HOST','192.168.20.200')
+        if address!=configured:raise ValueError('credential_host_mismatch')
+        with self.db() as db:
+            db.execute('INSERT OR REPLACE INTO platform_metadata VALUES(?,?)',('optional_api:'+method+':'+address,json.dumps({'actor':actor,'reason':reason,'at':time.time()})))
+            self.audit(db,actor,'optional_api.approve',method+':'+address,reason)
+        return {'ok':True}
+
+    def optional_api_approved(self,method,address):
+        with self.db() as db:return bool(db.execute('SELECT 1 FROM platform_metadata WHERE key=?',('optional_api:'+method+':'+address,)).fetchone())
+
     def source(self, **kwargs):
         from app.dashboard.device_registry import source
         return source(self, **kwargs)
@@ -117,14 +140,19 @@ class Platform:
         return next((r for r in self.list(collection) if r['id']==identity),None)
 
     def targets(self):
+        if self.inventory_authoritative():
+            return {'inventory_'+s['id'] for s in self.list('inventory')}|{'service_'+s['id'] for s in self.list('integrations')}
         return set(self.config.targets if self.config else ())|{'mikrotik_system','mikrotik_interfaces','mikrotik_network','mikrotik_vlan','mikrotik_routes','mikrotik_neighbors','wireguard','cisco_sf200','network_traffic','debian','docker','proxmox_resources'}|{'service_'+s['id'] for s in self.list('integrations')}|{'inventory_'+s['id'] for s in self.list('inventory')}
 
     def inventory_target(self,item):
         from app.monitoring.inventory import binding
         linked=binding(item)
-        if linked:return linked
         method=item.get('monitor_method','')
         source=self.source(identity=item['id']) if item.get('id') else None
+        if linked and source and not self.inventory_authoritative():return linked
+        # Only migrated registrations retain explicitly recorded legacy bindings.
+        if not source or self.inventory_authoritative():
+            return 'inventory_'+item['id'] if method in {'icmp','tcp','http','dns','snmp','ssh','routeros','proxmox'} else ''
         if source and source[2] and self.config and method=='icmp' and self.config.targets.get(source[2],{}).get('kind')=='icmp':
             return source[2]
         if method=='http':
@@ -143,6 +171,9 @@ class Platform:
         if collection=='inventory':
             from app.monitoring.inventory import binding
             binding(value)  # Existing credential references must match their configured host.
+            if value.get('parent_id'):
+                parent=self.get('inventory',value['parent_id'])
+                if not parent or parent.get('component_kind','physical')!='physical' or parent['type'] not in {'server','hypervisor','container-host'}:raise ValueError('invalid_parent')
         if collection=='topologies':
             valid={r['id'] for r in self.list('inventory')}
             for node in value['nodes']:
@@ -152,7 +183,7 @@ class Platform:
     def save(self,collection,body,actor,identity=None):
         models.fields(body,('revision','value','authorize_host','request_id'),('value',))
         request_key=body.get('request_id')
-        if 'request_id' in body and (collection!='topologies' or not isinstance(request_key,str) or not __import__('re').fullmatch(r'[a-f0-9]{32}',request_key)):raise ValueError('invalid_request_id')
+        if 'request_id' in body and (collection not in {'topologies','inventory','integrations'} or not isinstance(request_key,str) or not __import__('re').fullmatch(r'[a-f0-9]{32}',request_key)):raise ValueError('invalid_request_id')
         authorize=models.boolean(body.get('authorize_host',False))
         if authorize and collection!='inventory':raise ValueError('invalid_fields')
         address=models.host(body['value'].get('host','')) if authorize else None
@@ -162,6 +193,8 @@ class Platform:
         if collection=='inventory':
             from app.monitoring.inventory import scheduled
             if scheduled(value) and sum(1 for r in self.list(collection) if r['id']!=identity and scheduled(r))>=20:raise ValueError('monitor_limit')
+            previous=self.get(collection,identity) if identity else None
+            if value.get('monitor_method') in {'routeros','proxmox'} and (not previous or previous.get('monitor_method')!=value['monitor_method']) and not self.optional_api_approved(value['monitor_method'],value['host']):raise ValueError('optional_api_approval_required')
         if identity:
             revision=models.integer(body.get('revision'),1,10**9)
         else:identity=collection[:3]+'_'+secrets.token_hex(12);revision=0
@@ -172,7 +205,7 @@ class Platform:
                 if previous:
                     if previous[0]!=request_hash:raise Conflict()
                     return json.loads(previous[1])
-            if collection=='inventory' and db.execute("SELECT 1 FROM objects WHERE collection='inventory' AND json_extract(payload,'$.host')=? AND id<>?",(value['host'],identity)).fetchone():raise Conflict()
+            if collection=='inventory' and not value.get('parent_id') and db.execute("SELECT 1 FROM objects WHERE collection='inventory' AND json_extract(payload,'$.host')=? AND COALESCE(json_extract(payload,'$.parent_id'),'')='' AND id<>?",(value['host'],identity)).fetchone():raise Conflict()
             if revision:
                 result=db.execute('UPDATE objects SET revision=revision+1,payload=?,updated=? WHERE collection=? AND id=? AND revision=?',(json.dumps(value),now,collection,identity,revision))
                 if result.rowcount!=1:raise Conflict()
@@ -196,6 +229,7 @@ class Platform:
 
     def remove(self,collection,identity,revision,actor,detach=False):
         models.integer(revision,1,10**9)
+        if collection=='inventory' and any(r.get('parent_id')==identity for r in self.list('inventory')):raise ValueError('parent_has_components')
         if collection in {'inventory','integrations'}:
             field='device_id' if collection=='inventory' else 'service_id'
             if not detach and any(n.get(field)==identity for g in self.list('topologies') for n in g['nodes']):raise ValueError('referenced_by_topology')
@@ -251,7 +285,7 @@ class Platform:
         return [dict(zip(('username','name','role','enabled','revision'),r)) for r in rows]
 
     def save_user(self,body,actor):
-        models.fields(body,('username','name','role','enabled','password','revision'),('username','name','role','enabled'))
+        models.fields(body,('username','name','role','enabled','password','revision','confirmation'),('username','name','role','enabled'))
         username=models.text(body['username'],3,40)
         if not __import__('re').fullmatch(r'[a-z][a-z0-9_-]+',username) or username in {'nms','admin'}:raise ValueError('reserved_or_invalid_username')
         name=models.text(body['name'],1,80);role=body['role'];enabled=models.boolean(body['enabled'])
@@ -259,7 +293,8 @@ class Platform:
         password=body.get('password','')
         if not isinstance(password,str) or password and not 16<=len(password)<=128:raise ValueError('weak_password')
         with self.db() as db:
-            previous=db.execute('SELECT revision FROM accounts WHERE username=?',(username,)).fetchone()
+            previous=db.execute('SELECT revision,role,enabled FROM accounts WHERE username=?',(username,)).fetchone()
+            if (previous and (previous[1]!=role or bool(previous[2])!=enabled) or not previous and role in {'Administrator','Super Administrator','Network Administrator','Server Administrator'}) and body.get('confirmation')!=username:raise ValueError('user_confirmation_required')
             if previous:
                 if body.get('revision')!=previous[0]:raise Conflict()
                 db.execute('UPDATE accounts SET name=?,role=?,enabled=?,revision=revision+1 WHERE username=?',(name,role,enabled,username))
@@ -270,6 +305,18 @@ class Platform:
             if password:
                 salt=secrets.token_hex(16);db.execute('UPDATE accounts SET salt=?,hash=? WHERE username=?',(salt,self.password(password,salt),username))
             self.audit(db,actor,'user.update' if previous else 'user.create',username)
+        return {'ok':True}
+
+    def delete_user(self,body,actor):
+        models.fields(body,('username','revision','confirmation'),('username','revision','confirmation'))
+        name=models.text(body['username'],3,40)
+        if name in {'admin','nms',actor}:raise ValueError('reserved_or_invalid_username')
+        if body['confirmation']!=name:raise ValueError('user_confirmation_required')
+        with self.db() as db:
+            result=db.execute('DELETE FROM accounts WHERE username=? AND revision=?',(name,body['revision']))
+            if result.rowcount!=1:raise Conflict()
+            if db.execute("SELECT 1 FROM sqlite_master WHERE name='telegram_bindings'").fetchone():db.execute('DELETE FROM telegram_bindings WHERE username=?',(name,))
+            self.audit(db,actor,'user.delete',name)
         return {'ok':True}
 
     def audit_page(self,query):
@@ -318,8 +365,16 @@ class Platform:
                 if c=='inventory':
                     from app.monitoring.inventory import binding
                     binding(value)
+                    if value.get('monitor_method') in {'routeros','proxmox'} and not self.optional_api_approved(value['monitor_method'],value['host']):
+                        previous=self.get('inventory',identity)
+                        if not previous or previous.get('monitor_method')!=value['monitor_method'] or previous['host']!=value['host']:raise ValueError('optional_api_approval_required')
                 pending.append((c,identity,old.get(identity,0)+1,json.dumps(value),now,now))
         imported_ids={r[1] for r in pending if r[0]=='inventory'}
+        imported_inventory={r[1]:json.loads(r[3]) for r in pending if r[0]=='inventory'}
+        for value in imported_inventory.values():
+            if value.get('parent_id'):
+                parent=imported_inventory.get(value['parent_id'])
+                if not parent or parent.get('component_kind','physical')!='physical' or parent['type'] not in {'server','hypervisor','container-host'}:raise ValueError('invalid_parent')
         from app.monitoring.inventory import scheduled
         if sum(scheduled(json.loads(r[3])) for r in pending if r[0]=='inventory')>20:raise ValueError('monitor_limit')
         for c,identity,revision,payload,created,updated in pending:

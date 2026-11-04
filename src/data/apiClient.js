@@ -11,8 +11,9 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
     const abort = () => controller.abort()
     if (signal?.aborted) abort()
     signal?.addEventListener('abort', abort, { once: true })
-    const requestTimeout = /^\/api\/platform\/inventory\/inv_[a-f0-9]{24}\/test$/.test(path) ? Math.max(timeoutMs, 40000) : timeoutMs
-    const timer = setTimeout(() => { timedOut = true; controller.abort() }, requestTimeout)
+    const requestTimeout = /^\/api\/platform\/inventory\/inv_[a-f0-9]{24}\/test$/.test(path) ? Math.max(timeoutMs, 45000) : timeoutMs
+    const extendedTimeout=/\/api\/platform\/(?:portal\/test|telegram\/test)$/.test(path)?Math.max(requestTimeout,15000):requestTimeout
+    const timer = setTimeout(() => { timedOut = true; controller.abort() }, extendedTimeout)
     try {
       const response = await fetcher(`${config.base}${path}`, {
         method: body === undefined ? 'GET' : 'POST', credentials: 'same-origin', signal: controller.signal,
@@ -61,7 +62,7 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
   const get = (path, signal) => request(path, signal)
   return {
     platform: (path = '', { body, params = {}, signal } = {}) => {
-      const valid = /^(?:|access|settings|export|restore|users|audit|report|application-logs|assistant-history|ask|topology-verify|monitoring\/(?:enrollment|routeros\/read)|inventory\/import|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}(?:\/restore)?|\/runs\/run_[a-f0-9]{24}|\/compare)?|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
+      const valid = /^(?:|access|portal\/test|telegram(?:\/bindings|\/test)?|server-hierarchy|reset-plan|optional-api-approval|settings|export|restore|users(?:\/delete)?|audit|report|application-logs|assistant-history|ask|topology-verify|monitoring\/(?:enrollment|routeros\/read)|inventory\/import|device-backups(?:\/inv_[a-f0-9]{24}\/(?:run|policy)|\/backup_[a-f0-9]{24}(?:\/restore)?|\/runs\/run_[a-f0-9]{24}|\/compare)?|(?:integrations|topologies|inventory|maintenance)(?:\/[a-z0-9_]{1,80}(?:\/(?:delete|test))?)?|jobs\/job_[a-f0-9]{24}|acknowledge\/inc_(?:event_[1-9]\d{0,14}|state_[a-f0-9]{20}))$/.test(path)
       const allowed = path === 'report' ? ['target','from','to','resource'] : path === 'audit' ? ['page','q'] : path === 'application-logs' ? ['page','q','level','from','to'] : path === 'assistant-history' ? ['before'] : path === 'device-backups/compare' ? ['left','right'] : []
       if (!valid || Object.keys(params).some((key) => !allowed.includes(key))) return Promise.reject(new ApiError('target_not_allowed'))
       const query = new URLSearchParams(params)
@@ -92,12 +93,15 @@ export function createApiClient(config, fetcher = globalThis.fetch, timeoutMs = 
     incident: (id, signal) => typeof id === 'string' && /^inc_(event_[1-9]\d{0,14}|state_[a-f0-9]{20})$/.test(id) ? get(`/api/incidents/${id}`, signal) : Promise.reject(new ApiError('target_not_allowed')),
     device: (id, signal) => /^[a-z0-9_]{1,80}$/.test(id) ? get(`/api/devices/${id}`, signal) : Promise.reject(new ApiError('target_not_allowed')),
     history: (target, signal) => {
-      if (!historyTargets.includes(target)) return Promise.reject(new ApiError('target_not_allowed'))
+      if (!historyTargets.includes(target) && !/^inventory_inv_[a-f0-9]{24}$/.test(target) && !/^service_(?:int_[a-f0-9]{24}|svc_[a-f0-9]{20})$/.test(target)) return Promise.reject(new ApiError('target_not_allowed'))
       return get(`/api/history?target=${encodeURIComponent(target)}`, signal)
     },
   }
 }
 export const errorMessages = {
+  optional_api_approval_required:'Integrasi API baru memerlukan persetujuan khusus; pilih protokol standar terlebih dahulu.',
+  invalid_parent:'Pilih server fisik induk yang masih tersedia.',parent_required:'Komponen harus ditautkan ke server fisik.',parent_has_components:'Pindahkan komponen ke induk lain sebelum menghapus server.',
+  user_confirmation_required:'Konfirmasikan perubahan hak akses atau penghapusan pengguna.',invalid_bot_token:'Format token bot Telegram tidak valid.',account_unavailable:'Akun NMS tidak tersedia atau nonaktif.',telegram_not_configured:'Token bot belum dikonfigurasi.',
   not_configured: 'API belum dihubungkan', invalid_config: 'Konfigurasi API tidak valid',
   auth_required: 'Autentikasi gateway diperlukan', rate_limited: 'API membatasi permintaan',
   unavailable: 'API belum dapat dijangkau', timeout: 'Waktu tunggu API habis',

@@ -146,9 +146,11 @@ async def probe(target, host, port, config, categories, previous=None):
                             interface['sample_seconds']=round(elapsed,2)
                     interfaces.append(interface)
             if interfaces:telemetry['interfaces']=interfaces
+        from app.monitoring.snmp_resources import collect as resources
+        extra=await resources(engine,auth,address,requested)
         return result(target,'SNMPv3' if config['version']=='v3' else 'SNMPv2c','UP',host=host,
             latency_ms=round((time.monotonic()-started)*1000,2),system_info=telemetry['system_info'],uptime_seconds=telemetry['uptime_seconds'],
-            interfaces=interfaces,interface_count=reported,collected_interface_count=len(interfaces),scan_truncated=bool(reported and reported>len(interfaces) and requested.intersection({'interfaces','traffic','bandwidth'})),detected_oids=['SNMPv2-MIB::sysDescr.0','SNMPv2-MIB::sysName.0']+(['IF-MIB'] if interfaces else []))
+            interfaces=interfaces,interface_count=reported,collected_interface_count=len(interfaces),scan_truncated=bool(reported and reported>len(interfaces) and requested.intersection({'interfaces','traffic','bandwidth'})),detected_oids=['SNMPv2-MIB::sysDescr.0','SNMPv2-MIB::sysName.0']+(['IF-MIB'] if interfaces else []),**extra)
     except Exception:
         return result(target,'SNMP',error='snmp_request_failed',host=host)
     finally:
