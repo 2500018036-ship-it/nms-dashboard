@@ -54,8 +54,9 @@ def params(query, kind):
 def escaped(value): return value.replace('\\','\\\\').replace('%','\\%').replace('_','\\_')
 
 class Journal:
-    def __init__(self, db):
+    def __init__(self, db, store=None):
         self.db = db
+        self.store=store
         db.create_function('event_field',4,self.event_field,deterministic=True)
         db.create_function('check_message',1,self.check_message,deterministic=True)
         db.create_function('check_device',2,self.check_device,deterministic=True)
@@ -142,6 +143,9 @@ class Journal:
         item['acknowledgment']={'supported':False,'status':'UNAVAILABLE'}
         item['resolution_source']='monitoring_recovery' if item['status']=='RECOVERED' else 'policy_or_inventory' if item['status']=='RETIRED' else None
         item['partial_history']=bool(item['partial_history'] or item['opening_event_id'] is not None and not self.db.execute('SELECT 1 FROM events WHERE id=?',(item['opening_event_id'],)).fetchone())
+        if self.store:
+            from app.alerts.inventory_presentation import describe
+            item.update(describe(self.store,item))
         return item
 
     def incidents(self, query):

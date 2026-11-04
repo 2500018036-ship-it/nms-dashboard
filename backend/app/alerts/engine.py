@@ -29,6 +29,11 @@ class Alerts:
             state['first_seen']=None
         if event:
             event.update(key=key,time=now)
+            from pathlib import Path
+            from app.dashboard.platform import Platform
+            from app.alerts.inventory_presentation import describe
+            context=describe(Platform(Path(self.database.db.execute('PRAGMA database_list').fetchone()[2]).parent),event)
+            event.update(device=context['display_name'],title=context['description'])
             # Durable pending notification is retried only after cooldown on transport failure.
             state['pending']=event
             state['last_attempt']=state['last_sent'] if event['kind']=='ALERT' else 0

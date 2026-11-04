@@ -113,6 +113,17 @@ class Scheduler:
                 log.error('device_backup_scheduler_failed category=%s',type(exc).__name__)
             await asyncio.sleep(60)
 
+    async def portal_polling(self):
+        from app.dashboard.portal import public,verify
+        while True:
+            try:
+                for item in public(self.platform):
+                    if item['enabled'] and time.time()-(item['verified_at'] or 0)>=300:
+                        await verify(self.platform,item)
+            except asyncio.CancelledError:raise
+            except Exception as exc:log.warning('portal_verification_failed category=%s',type(exc).__name__)
+            await asyncio.sleep(30)
+
     def observe_devices(self,results):
         for value in results:
             target=self.settings.targets.get(value['target'],{})
@@ -125,6 +136,7 @@ class Scheduler:
     async def flush_notifications(self):
         self.outbox.stage(self.settings.alerts)
         if not self.settings.alerts:return
+        if getattr(self.bot,'control',None) and (not self.bot.application or not self.bot.control.recipients()):return
         pending=self.outbox.pending()
         if not pending:return
         identities=[identity for identity,event in pending]

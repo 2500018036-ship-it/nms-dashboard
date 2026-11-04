@@ -31,6 +31,32 @@ class Broker:
         return stdout.decode().strip()
 
     def selected(self, identity):
+        if re.fullmatch(r'(?:inv_|int_)[a-f0-9]{24}|svc_[a-f0-9]{20}',identity or ''):
+            with closing(sqlite3.connect('file:'+self.inventory+'?mode=ro',uri=True,timeout=3)) as db:
+                row=db.execute("SELECT collection,payload FROM objects WHERE id=? AND collection IN ('inventory','integrations')",(identity,)).fetchone()
+                check=db.execute('SELECT url,checked,payload FROM portal_checks WHERE target_id=?',(identity,)).fetchone()
+                policy=db.execute('SELECT payload FROM platform_settings WHERE id=1').fetchone()
+            if not row or not check or not policy:raise ValueError('portal_not_verified')
+            value=json.loads(row[1]);url=value.get('dashboard_url') if row[0]=='inventory' else value.get('url')
+            probe=json.loads(check[2])
+            if not value.get('enabled') or not url or url!=check[0] or time.time()-check[1]>=900 or not probe.get('reachable'):raise ValueError('portal_not_verified')
+            from urllib.parse import urlsplit
+            if urlsplit(url).hostname not in json.loads(policy[0]).get('allowed_hosts',[]):raise ValueError('host_not_allowed')
+            # Origins are fixed by the verified server record, never by browser request parameters.
+            reviewed=next((v for v in self.config['targets'] if v['url'].rstrip('/')==url.rstrip('/')), {})
+            selected={'id':identity,'name':value['name'],'url':url,'roles':['Administrator','Super Administrator','Network Administrator','Server Administrator']}
+            ip=probe['connect_ip']
+            import ipaddress
+            address=ipaddress.IPv4Address(ip)
+            if address.is_loopback or address.is_link_local or address.is_multicast or address.is_unspecified or address.is_reserved:raise ValueError('invalid_connect_address')
+            try:ipaddress.IPv4Address(urlsplit(url).hostname)
+            except ValueError:selected['connect_ip']=ip
+            else:
+                if urlsplit(url).hostname!=ip:raise ValueError('invalid_connect_address')
+            for field in ('tls_spki','asset_origins'):
+                if field in reviewed:selected[field]=reviewed[field]
+            origin(url,selected.get('connect_ip'))
+            return selected
         selected = dict(target(self.config, identity))
         mac = selected.get('inventory_mac')
         if mac:

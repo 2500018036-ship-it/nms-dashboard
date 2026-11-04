@@ -63,11 +63,9 @@ export function AccessPortalPage() {
   const [displayAttempt, setDisplayAttempt] = useState(0)
   const current = useRef(null)
   const lastActivity = useRef(0)
-  useEffect(() => {
-    const controller = new AbortController()
-    platform.client.platform('access', { signal: controller.signal }).then(setCatalog).catch((e) => { if (!controller.signal.aborted) setError(e.code || 'unavailable') })
-    return () => controller.abort()
-  }, [platform.client])
+  const refresh=useCallback(async()=>{try{setCatalog(await platform.client.platform('access'))}catch(e){setError(e.code||'unavailable')}},[platform.client])
+  useEffect(()=>{const start=setTimeout(refresh,0);const timer=setInterval(refresh,30000);return()=>{clearTimeout(start);clearInterval(timer)}},[refresh])
+  const verify=async(target)=>{setBusy(true);try{await platform.client.platform('portal/test',{body:{target}});await refresh()}catch(e){setError(e.code||'unavailable')}finally{setBusy(false)}}
   useEffect(() => {
     const identity=session?.id
     if (!identity || session.state !== 'starting') return
@@ -128,7 +126,7 @@ export function AccessPortalPage() {
       <p className="text-muted">Pilih perangkat untuk menampilkan GUI aslinya di ruang kerja ini. HP/laptop cukup mengakses domain NMS melalui HTTPS.</p>
       {error && <div className="alert alert-danger" role="alert">{accessErrors[error] || 'Portal belum dapat menyelesaikan permintaan.'}</div>}
       {catalog && !catalog.enabled && <div className="alert alert-info">Runtime akses belum diaktifkan. Aktivasi perubahan NMS dan reverse proxy menunggu persetujuan pengelola.</div>}
-      <div className="d-flex flex-wrap gap-2">{catalog?.targets.map((target) => <button key={target.id} className={`btn ${session?.target === target.id ? 'btn-primary' : 'btn-outline-primary'}`} disabled={!catalog.enabled || !target.allowed || busy} title={target.allowed ? target.url : 'Belum diizinkan untuk akun atau perangkat ini'} onClick={() => open(target.id)}>{target.name}</button>)}</div>
+      <div className="row g-3">{catalog?.targets.map((target)=><div className="col-md-6 col-xl-4" key={target.id}><div className="border rounded p-3 h-100"><strong className="d-block">{target.name}</strong><small className="d-block text-break text-muted">{target.url}</small><p className="small my-2">{target.available?'Endpoint terjangkau; login mengikuti akun perangkat.':accessErrors[target.reason]||target.reason||'Belum diverifikasi.'}</p>{target.verification?.iframe_blocked&&<p className="small text-muted">Iframe dibatasi perangkat; memakai browser terisolasi.</p>}{target.verification?.authentication_required&&<p className="small text-muted">Perangkat memerlukan autentikasi; masukkan akun pada GUI asli.</p>}<small className="d-block mb-2">Diperiksa {formatTime(target.verified_at)}</small><div className="d-flex gap-2"><button className="btn btn-sm btn-primary" disabled={!catalog.enabled||!target.allowed||busy} onClick={()=>open(target.id)}>Buka GUI asli</button>{/^(inv_|int_|svc_)/.test(target.id)&&<button className="btn btn-sm btn-outline-secondary" disabled={busy} onClick={()=>verify(target.id)}>Uji akses</button>}</div>{target.verification?.error&&<details className="small mt-2"><summary>Detail teknis</summary>{accessErrors[target.verification.error]||target.verification.error}</details>}</div></div>)}</div>
     </Panel>
     {session && <Panel title={selected?.name || 'GUI perangkat'} subtitle={`Sesi ${state === 'connected' ? 'terhubung' : session.state === 'starting' ? 'sedang disiapkan' : state} · Berakhir ${formatTime(session.expires_at)}`} action={<div className="d-flex gap-2">{session.state==='ready'&&['disconnected','failed'].includes(state)&&<button className="btn btn-sm btn-outline-primary" onClick={()=>{setState('connecting');setDisplayAttempt((value)=>value+1)}}>Sambungkan layar ulang</button>}<button className="btn btn-sm btn-outline-danger" disabled={busy} onClick={close}>Tutup sesi</button></div>}>
       {session.state === 'ready' ? <NativeDisplay key={`${session.id}-${displayAttempt}`} session={session} onState={setState} onActivity={activity} /> : <div className="py-5 text-center" role="status">{session.state === 'failed' ? 'Browser sesi gagal dimulai. Tutup sesi lalu periksa runtime.' : <><span className="spinner-border text-primary" /><p className="mt-3">Menyiapkan GUI asli…</p></>}</div>}

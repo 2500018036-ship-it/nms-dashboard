@@ -1,4 +1,8 @@
 export const accessErrors = {
+  portal_not_verified:'URL belum diuji dari server NMS. Klik Uji akses.',portal_verification_expired:'Hasil verifikasi sudah kedaluwarsa; uji ulang sebelum membuka.',
+  tls_verification_failed:'Sertifikat TLS tidak dipercaya. Pasang CA yang benar atau minta administrator meninjau pin sertifikat.',certificate_pin_mismatch:'Sertifikat berbeda dari pin yang disetujui; akses dihentikan.',
+  timeout:'Server tidak menerima balasan. Periksa alamat, port, jalur jaringan dan firewall tujuan.',dns_resolution_failed:'Hostname GUI tidak dapat diresolusikan dari server NMS.',dashboard_connection_failed:'Koneksi atau respons HTTP GUI gagal.',
+  redirect_origin_not_approved:'GUI mengarahkan ke origin lain yang belum diizinkan. Administrator perlu meninjau origin tujuan.',dashboard_http_error:'GUI merespons kesalahan HTTP. Periksa layanan perangkat.',disabled:'Target dinonaktifkan.',
   access_not_activated: 'Portal akses belum diaktifkan pada server.',
   access_denied: 'Akun Anda belum mendapat izin untuk GUI ini.',
   authentication_required: 'Sesi NMS berakhir. Silakan masuk kembali.',

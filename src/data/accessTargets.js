@@ -1,5 +1,6 @@
 // Navigation hints only. The server independently authorizes its exact target allowlist.
 export function portalTarget(service) {
+  if (/^(?:inv_|int_)[a-f0-9]{24}$|^svc_[a-f0-9]{20}$/.test(service.id||'')) return service.id
   try {
     const url = new URL(service.url)
     const host = url.hostname; const port = url.port || (url.protocol === 'https:' ? '443' : '80')

@@ -19,16 +19,22 @@ class AccessPortalTests(unittest.TestCase):
             {'id':'router','name':'Router','url':'http://192.168.20.1/','roles':['Administrator','Network Administrator']},
             {'id':'server','name':'Server','url':'https://192.168.20.200:8006/','roles':['Administrator','Server Administrator']}]}))
         self.env=patch.dict(os.environ,{'NMS_ACCESS_ENABLED':'true','NMS_ACCESS_TARGETS_FILE':str(self.config)});self.env.start()
+        import json,time
+        from app.dashboard.portal import initialize,entries
+        initialize(self.store)
+        with self.store.db() as db:
+            for target in entries(self.store):db.execute('INSERT OR REPLACE INTO portal_checks VALUES(?,?,?,?)',(target['id'],target['url'],time.time(),json.dumps({'reachable':True,'connect_ip':'192.168.20.1'})))
     def tearDown(self):self.env.stop();self.tmp.cleanup()
     def test_disabled_by_default_does_not_authorize_a_runtime(self):
         with patch.dict(os.environ,{'NMS_ACCESS_ENABLED':'false'}):
             value=authorize(self.store,self.session,{})
             self.assertFalse(value['enabled']);self.assertEqual(value['targets'],[])
     def test_acl_and_current_session_binding_are_authoritative(self):
-        value=authorize(self.store,self.session,{'target':['server']})
+        target=next(t['id'] for t in __import__('app.dashboard.portal',fromlist=['entries']).entries(self.store) if t['url']=='https://192.168.20.200:8006/')
+        value=authorize(self.store,self.session,{'target':[target]})
         self.assertEqual(value['binding'],'bound-session')
         self.session['user']['role']='Network Administrator'
-        with self.assertRaises(Forbidden):authorize(self.store,self.session,{'target':['server']})
+        with self.assertRaises(Forbidden):authorize(self.store,self.session,{'target':[target]})
         self.assertTrue(authorize(self.store,self.session,{'target':['router']})['targets'][0]['allowed'])
         self.session['user']['role']='Viewer'
         with self.assertRaises(Forbidden):authorize(self.store,self.session,{'target':['router']})

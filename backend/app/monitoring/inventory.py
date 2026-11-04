@@ -16,19 +16,23 @@ def binding(item):
     return ''
 
 def scheduled(item):
-    return item['enabled'] and item.get('monitor_method') in {'icmp','tcp','http','dns','snmp','ssh'}
+    return item['enabled'] and item.get('monitor_method') in {'icmp','tcp','http','dns','snmp','ssh','routeros','proxmox'}
 
-async def collect(item,allowed_hosts,credentials=None,previous=None):
+async def collect(item,allowed_hosts,credentials=None,previous=None,discovery=False):
     target='inventory_'+item['id'];method=item.get('monitor_method')
     if item['host'] not in allowed_hosts:return result(target,'inventory',error='host_not_allowed')
     if method in {'icmp','tcp','dns'}:
         try:ipaddress.IPv4Address(item['host'])
         except ValueError:return result(target,'inventory',error='literal_ipv4_required')
+    categories=item.get('monitor_categories',[])
+    if discovery:
+        from app.monitoring.device_capabilities import CATEGORIES
+        categories=list(CATEGORIES)
     if method=='icmp':value=await icmp.probe(target,item['host'])
     elif method=='tcp':value=await tcp.probe(target,item['host'],item['monitor_port'])
     elif method=='dns':value=await dns.probe(target,item['host'],item['monitor_port'],item['dns_query'])
     elif method=='http':value=await probe(target,item['monitor_url'],allowed_hosts)
-    elif method=='snmp':value=await snmp.probe(target,item['host'],item['monitor_port'],(credentials or {}).get('snmp',{}),item.get('monitor_categories',[]),previous)
-    elif method=='ssh':value=await ssh.probe(target,item['host'],item['monitor_port'],(credentials or {}).get('ssh',{}),item.get('monitor_categories',[]),previous,item.get('vendor',''),item.get('model',''))
+    elif method=='snmp':value=await snmp.probe(target,item['host'],item['monitor_port'],(credentials or {}).get('snmp',{}),categories,previous)
+    elif method=='ssh':value=await ssh.probe(target,item['host'],item['monitor_port'],(credentials or {}).get('ssh',{}),categories,previous,item.get('vendor',''),item.get('model',''))
     else:return result(target,'inventory',error='adapter_not_configured')
     return {**value,'host':item['host'],'display_name':item['name']}

@@ -105,6 +105,7 @@ async def probe(target,host,port,credentials,categories,previous=None,vendor='',
         return result(target,'SSH',error='ssh_unsupported_os',host=host)
     config=credentials if isinstance(credentials,dict) else {}
     username=config.get('username','');password=config.get('password','');key_type=config.get('host_key_type','');key_data=config.get('host_key_data','')
+    if username.lower()=='root':return result(target,'SSH',error='readonly_account_required',host=host)
     if not username or not password or key_type not in {'ssh-ed25519','ecdsa-sha2-nistp256'} or not key_data:
         return result(target,'SSH',error='missing_ssh_credentials',host=host)
     try:

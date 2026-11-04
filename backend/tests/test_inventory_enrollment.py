@@ -30,19 +30,22 @@ class InventoryEnrollmentTests(unittest.IsolatedAsyncioTestCase):
   with self.assertRaises(ValueError):self.store.remove('inventory',item['id'],1,'admin')
   self.store.remove('topologies',graph['id'],1,'admin');self.store.remove('inventory',item['id'],1,'admin')
  async def test_existing_collector_reference_does_not_create_duplicate_poll(self):
+  self.store.approve_optional_api({'method':'proxmox','host':'192.168.20.200','reason':'Read-only VM audit detail needs approved optional API.','confirmation':'SETUJUI API 192.168.20.200'},'admin')
   item=self.store.save('inventory',{'value':dict(inventory(),host='192.168.20.200',monitor_method='proxmox',credential_ref='proxmox-default')},'admin')
-  self.assertEqual(self.store.inventory_target(item),'proxmox_resources')
-  self.assertFalse(__import__('app.monitoring.inventory',fromlist=['scheduled']).scheduled(item))
- async def test_http_inventory_reuses_existing_launcher_monitor(self):
+  self.assertEqual(self.store.inventory_target(item),'inventory_'+item['id'])
+  self.assertTrue(__import__('app.monitoring.inventory',fromlist=['scheduled']).scheduled(item))
+ async def test_http_inventory_has_independent_target_and_polling(self):
   service=self.store.save('integrations',{'value':dict(name='DNS console',url='http://192.168.20.199:5380/',kind='dns',enabled=True,monitor_enabled=True,poll_interval=60)},'admin')
   item=self.store.save('inventory',{'value':inventory(monitor_method='http',monitor_url='http://192.168.20.199:5380/')},'admin')
-  self.assertEqual(self.store.inventory_target(item),'service_'+service['id'])
-  with patch('app.services.health.service_probe',AsyncMock(return_value={'target':'service_'+service['id'],'status':'UP','method':'HTTP','configuration_hash':__import__('hashlib').sha256(service['url'].encode()).hexdigest()})) as probe:
-   await self.monitor.check('inventory_'+item['id']);await self.monitor.check('service_'+service['id'])
+  self.assertEqual(self.store.inventory_target(item),'inventory_'+item['id'])
+  self.assertNotEqual(self.store.inventory_target(item),'service_'+service['id'])
+  with patch('app.monitoring.inventory.probe',AsyncMock(return_value={'target':'inventory_'+item['id'],'status':'UP','method':'HTTP'})) as probe:
+   await self.monitor.check('inventory_'+item['id']);await self.monitor.check('inventory_'+item['id'])
    probe.assert_awaited_once()
  async def test_ai_inventory_tool_is_read_only_and_uses_bound_collector(self):
+  self.store.approve_optional_api({'method':'proxmox','host':'192.168.20.200','reason':'Read-only VM audit detail needs approved optional API.','confirmation':'SETUJUI API 192.168.20.200'},'admin')
   from app.ai.tool_registry import Registry
   item=self.store.save('inventory',{'value':dict(inventory(),host='192.168.20.200',monitor_method='proxmox',credential_ref='proxmox-default')},'admin')
   registry=Registry();self.monitor.register(registry);self.monitor.check=AsyncMock(return_value={'status':'UP'})
-  await registry.execute('check_inventory_device',json.dumps({'device_id':item['id']}));self.monitor.check.assert_awaited_once_with('proxmox_resources')
+  await registry.execute('check_inventory_device',json.dumps({'device_id':item['id']}));self.monitor.check.assert_awaited_once_with('inventory_'+item['id'])
   rejected=await registry.execute('check_inventory_device',json.dumps({'device_id':item['id'],'command':'reboot'}));self.assertEqual(rejected['error'],'invalid_arguments')

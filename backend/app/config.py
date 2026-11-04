@@ -77,7 +77,7 @@ class Settings:
     def load(cls):
         ids = frozenset(int(v.strip()) for v in os.getenv("ALLOWED_TELEGRAM_IDS", os.getenv("ALLOWED_TELEGRAM_ID", "")).split(",") if v.strip())
         token, key = os.getenv("TELEGRAM_BOT_TOKEN", ""), os.getenv("OPENROUTER_API_KEY", "")
-        if not ids or any(i <= 0 for i in ids) or not token:
+        if (not flag('DASHBOARD_ENABLED') and (not ids or not token)) or any(i <= 0 for i in ids):
             raise ValueError("Token Telegram dan allowlist user wajib diisi; AI key opsional untuk monitoring tanpa AI")
         models = tuple(dict.fromkeys(v.strip() for v in (os.getenv("OPENROUTER_MODEL", "openrouter/free") + "," + os.getenv("OPENROUTER_FALLBACK_MODELS", "")).split(",") if v.strip()))
         if len(models) > 3:
@@ -126,8 +126,8 @@ class Settings:
         dashboard_password = os.getenv("DASHBOARD_PASSWORD", "")
         if dashboard and len(dashboard_password) < 24:
             raise ValueError("Dashboard membutuhkan password minimal 24 karakter")
-        chat_id = int(os.getenv("ALERT_CHAT_ID") or str(min(ids)))
-        if chat_id not in ids:
+        chat_id = int(os.getenv("ALERT_CHAT_ID") or str(min(ids) if ids else 0))
+        if chat_id and chat_id not in ids:
             raise ValueError("ALERT_CHAT_ID harus ada dalam allowlist user")
         warning=number('BANDWIDTH_WARNING_PERCENT',85,1,98)
         critical=number('BANDWIDTH_CRITICAL_PERCENT',95,2,100)

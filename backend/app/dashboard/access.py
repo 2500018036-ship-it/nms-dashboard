@@ -24,20 +24,11 @@ def authorize(store, session, query):
         config = json.loads(path.read_text())
     role = session['user']['role']
     targets = []
-    for value in config['targets']:
-        url = value['url']
-        available = True
-        if value.get('inventory_mac'):
-            matches = [d for d in store.list('inventory') if d.get('mac_address', '').upper() == value['inventory_mac'].upper() and d['enabled']]
-            if len(matches) != 1:
-                available = False
-            else:
-                parsed = urlsplit(url)
-                authority = matches[0]['host'] + (':' + str(parsed.port) if parsed.port else '')
-                url = urlunsplit((parsed.scheme, authority, parsed.path, '', ''))
-        allowed = role in value['roles'] and available
-        targets.append({'id': value['id'], 'name': value['name'], 'url': url,
-            'allowed': allowed, 'available': available, 'reason': '' if allowed else 'device_address_unavailable' if not available else 'access_denied'})
+    from app.dashboard.portal import public
+    dynamic=public(store) if enabled else []
+    for value in dynamic:
+        allowed=role in value['roles'] and value['available']
+        targets.append({k:v for k,v in value.items() if k!='roles'}|{'allowed':allowed,'reason':value['reason'] if role in value['roles'] else 'access_denied'})
     if identity:
         try:require(session, 'gui.access')
         except Forbidden:

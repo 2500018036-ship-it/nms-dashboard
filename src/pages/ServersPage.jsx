@@ -1,4 +1,6 @@
 import { Link } from 'react-router'
+import { ServerHierarchy } from '../components/ServerHierarchy'
+import {usePlatform} from '../data/platformContext'
 
 import { useState } from 'react'
 
@@ -13,7 +15,7 @@ import { HostTable, GuestTable, ContainerTable, ServiceTable, SearchField } from
 
 export function ServersPage() {
 
-  const { snapshot, observedDevices } = useMonitoring(); const { core } = snapshot
+  const { snapshot, observedDevices } = useMonitoring(); const { core } = snapshot;const p=usePlatform();const physical=p.inventory.filter((d)=>!d.parent_id&&d.component_kind==='physical'&&['server','hypervisor','container-host'].includes(d.type))
 
   const [tab, setTab] = useState('hosts'); const [query, setQuery] = useState(''); const [status, setStatus] = useState('all')
 
@@ -23,9 +25,9 @@ export function ServersPage() {
 
   const ready = snapshot.checks.length > 0
 
-  return <><div className="d-flex justify-content-end mb-3"><Link className="btn btn-outline-primary" to="/virtualization">Proxmox VE · nodes, VM, LXC, storage</Link></div>
+  return <><ServerHierarchy/><div className="d-flex justify-content-end mb-3"><Link className="btn btn-outline-primary" to="/virtualization">Proxmox VE · nodes, VM, LXC, storage</Link></div>
 
-    <div className="row g-3 mb-4"><MetricCard label="Host & node" value={ready ? core.hosts.length : '—'} icon="hdd-stack" note={ready ? topologyHostSummary(core.hosts) : 'Menunggu data collector host'} /><MetricCard label="VM / LXC" value={core.guests.length || '—'} icon="pc-display" note="Hanya guest yang dikembalikan API Proxmox" /><MetricCard label="Container" value={core.containers.length || '—'} icon="box-seam" note="Snapshot restricted collector pada Debian server" /><MetricCard label="Pemeriksaan layanan" value={ready ? core.services.length : '—'} icon="globe" note="HTTP / DNS / TCP / ICMP sesuai metode" /></div>
+    <div className="row g-3 mb-4"><MetricCard label="Server fisik" value={physical.length} icon="hdd-stack" note={ready ? topologyHostSummary(core.hosts) : 'Berdasarkan relasi inventaris fisik'} /><MetricCard label="VM / LXC" value={core.guests.length || '—'} icon="pc-display" note="Hanya guest yang dikembalikan API Proxmox" /><MetricCard label="Container" value={core.containers.length || '—'} icon="box-seam" note="Snapshot restricted collector pada Debian server" /><MetricCard label="Pemeriksaan layanan" value={ready ? core.services.length : '—'} icon="globe" note="HTTP / DNS / TCP / ICMP sesuai metode" /></div>
 
     <Tabs value={tab} onChange={(value) => { setTab(value); setQuery(''); setStatus('all') }} items={[{ value: 'hosts', label: 'Host' }, { value: 'guests', label: 'VM / LXC' }, { value: 'containers', label: 'Docker' }, { value: 'services', label: 'Layanan' }]} />
 

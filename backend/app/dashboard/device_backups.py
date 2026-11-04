@@ -29,6 +29,7 @@ class DeviceConfigBackups:
         self.root.mkdir(mode=0o700, parents=True, exist_ok=True)
         os.chmod(self.root, 0o700)
         with store.db() as db:
+            db.execute('CREATE TABLE IF NOT EXISTS device_backup_inventory(id TEXT PRIMARY KEY,payload TEXT NOT NULL)')
             db.executescript('''CREATE TABLE IF NOT EXISTS device_backup_policies(
                 inventory_id TEXT PRIMARY KEY,enabled INTEGER NOT NULL,interval_seconds INTEGER NOT NULL,
                 retention_versions INTEGER NOT NULL,next_due REAL NOT NULL,updated REAL NOT NULL,actor TEXT NOT NULL);
@@ -80,6 +81,11 @@ class DeviceConfigBackups:
             for item in self.store.list('inventory'):
                 devices.append({'device':{k:item[k] for k in ('id','name','host','type','vendor','model') if k in item},
                     **self._support(item),'policy':self._policy(db,item['id']),'versions':self._versions(db,item['id'])})
+            live={d['device']['id'] for d in devices}
+            for identity,payload in db.execute('SELECT id,payload FROM device_backup_inventory'):
+                if identity not in live:
+                    devices.append({'device':json.loads(payload),'supported':False,'adapter':None,'reason':'Inventaris lama diarsipkan; versi backup tetap dapat diunduh.',
+                        'policy':self._policy(db,identity),'versions':self._versions(db,identity),'archived':True})
             runs=[dict(zip(('id','inventory_id','actor','trigger','started_at','finished_at','status','error','backup_id'),row))
                 for row in db.execute('SELECT id,inventory_id,actor,trigger,started,finished,status,error,backup_id FROM device_backup_runs ORDER BY started DESC LIMIT 100')]
         return {'devices':devices,'runs':runs,'restore_mode':'manual-native-gui'}
@@ -213,6 +219,9 @@ class DeviceConfigBackups:
 
     def download(self, backup_id, actor):
         item,text=self._read(backup_id);device=self.store.get('inventory',item['inventory_id'])
+        if not device:
+            with self.store.db() as db:row=db.execute('SELECT payload FROM device_backup_inventory WHERE id=?',(item['inventory_id'],)).fetchone()
+            device=json.loads(row[0]) if row else None
         if not device:raise Missing()
         self.store.log(actor,'device_backup.download',backup_id,f'sha256:{item["sha256"]}')
         safe_name=re.sub(r'[^A-Za-z0-9_-]','_',device['name'])

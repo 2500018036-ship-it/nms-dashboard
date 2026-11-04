@@ -43,7 +43,7 @@ def telemetry(sample):
     if not isinstance(sample,dict):return {}
     data=sample.get('data') if isinstance(sample.get('data'),dict) else {}
     out={}
-    for key in ('status','error','method','latency_ms','packet_loss_percent','http_status','uptime_seconds','cpu_percent','memory_percent','memory_total','memory_available','host','sample_epoch'):
+    for key in ('status','error','method','latency_ms','packet_loss_percent','http_status','uptime_seconds','cpu_percent','memory_percent','memory_total','memory_available','temperature','host','sample_epoch'):
         value=sample.get(key)
         if value is None or type(value) in (bool,int,float) or isinstance(value,str):out[key]=value
     info=sample.get('system_info') if isinstance(sample.get('system_info'),dict) else {}
@@ -109,7 +109,7 @@ def telemetry(sample):
         ('containers',None,('name','state','health','image','restart_count','cpu_percent','memory_bytes','memory_limit_bytes','expected_running')),
         ('tasks',None,('node','type','status','starttime','endtime')),
     ):
-        values=data.get(path,[]) if path else sample.get(key,[])
+        values=sample.get(key) or (data.get(path,[]) if path else [])
         if isinstance(values,list) and values:out[key]=[{k:row[k] for k in fields if k in row} for row in values[:200] if isinstance(row,dict)]
     try:
         total=float(resource[0].get('total-hdd-space',0)) if isinstance(resource,list) and resource else 0

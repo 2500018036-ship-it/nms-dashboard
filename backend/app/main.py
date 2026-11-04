@@ -22,7 +22,8 @@ def healthcheck():
     try:
         settings=Settings.load()
         from app.dashboard.platform import Platform
-        Platform(settings.data_dir,settings).apply(settings,mark=False)
+        platform=Platform(settings.data_dir,settings);platform.apply(settings,mark=False)
+        if platform.inventory_authoritative():settings.continuous_enabled=False
         value=json.loads((Path(settings.data_dir)/'health.json').read_text())
         return (time.time()-value['at']<45 and time.time()-value['last_cycle']<settings.poll_interval+90
             and time.time()-value.get('notifier_at',0)<75
@@ -102,7 +103,8 @@ def main():
     os.environ.setdefault('TZ','Asia/Jakarta')
     if hasattr(time,'tzset'):time.tzset()
     try:
-        build(settings).run_polling(timeout=25,bootstrap_retries=3,drop_pending_updates=False)
+        from app.services.runtime import run
+        asyncio.run(run(settings))
     except Exception:
         logging.exception('application_start_or_run_failed')
         raise SystemExit(1) from None
