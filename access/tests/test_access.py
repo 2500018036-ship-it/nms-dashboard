@@ -108,6 +108,40 @@ class GatewayTests(unittest.IsolatedAsyncioTestCase):
         await self.gateway.sweep_once()
         self.assertNotIn(identity,self.gateway.sessions)
 
+    async def test_close_stops_worker_before_draining_a_live_proxy_connection(self):
+        connected=asyncio.Event();closed=asyncio.Event();identity='2'*32
+        async def connection(reader,writer):
+            connected.set()
+            try:await reader.read()
+            finally:
+                writer.close();await writer.wait_closed();closed.set()
+        proxy=await asyncio.start_server(connection,'127.0.0.1',0)
+        reader,worker=await asyncio.open_connection('127.0.0.1',proxy.sockets[0].getsockname()[1])
+        await connected.wait()
+        self.gateway.sessions[identity]=Session(identity,'portfolio','admin','owner-binding',time.time(),9999999999,time.time(),'private-cookie',proxy)
+        async def remove_worker(method,path):
+            self.assertNotIn(identity,self.gateway.sessions)
+            self.assertEqual((method,path),('DELETE','/workers/'+identity))
+            worker.close();await worker.wait_closed();await closed.wait()
+            return {'ok':True}
+        self.gateway.control=AsyncMock(side_effect=remove_worker)
+        try:
+            await asyncio.wait_for(self.gateway.close(identity,'user_closed'),2)
+            self.gateway.control.assert_awaited_once()
+            self.assertNotIn(identity,self.gateway.sessions)
+        finally:
+            worker.close();await worker.wait_closed()
+            proxy.close();await asyncio.wait_for(proxy.wait_closed(),2)
+
+    async def test_concurrent_close_revokes_once_and_removes_one_worker(self):
+        identity='3'*32
+        self.gateway.sessions[identity]=Session(identity,'mikrotik','admin','owner-binding',time.time(),9999999999,time.time(),'private-cookie',None)
+        async def removal(method,path):await asyncio.sleep(.01);return {'ok':True}
+        self.gateway.control=AsyncMock(side_effect=removal)
+        await asyncio.gather(self.gateway.close(identity,'user_closed'),self.gateway.close(identity,'idle_expired'))
+        self.gateway.control.assert_awaited_once()
+        self.assertNotIn(identity,self.gateway.sessions)
+
     async def test_audit_has_lifecycle_metadata_without_cookie_or_password(self):
         self.gateway.record('admin','mikrotik','b'*32,'access.started')
         r=await self.client.get('/access-api/audit',headers=self.headers)
