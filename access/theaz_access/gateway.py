@@ -115,19 +115,29 @@ class Gateway:
             'websocket_path': '/access-api/sessions/' + item.id + '/display'}
 
     async def close(self, identity, reason):
-        item = self.sessions.get(identity)
+        # Revoke the session before any potentially slow resource cleanup. A
+        # concurrent expiry/logout must not repeat the same worker removal.
+        item = self.sessions.pop(identity, None)
         if item:
-            for socket in list(item.sockets):
-                await socket.close(code=1008, message=b'session_ended')
             if item.proxy:
                 item.proxy.close()
-                await item.proxy.wait_closed()
+            for socket in list(item.sockets):
+                try:
+                    await asyncio.wait_for(socket.close(code=1008, message=b'session_ended'), 2)
+                except (TimeoutError, OSError):
+                    pass
             try:
+                # Persistent GUI connections keep the egress server alive.
+                # Stop their browser before waiting for the server to drain.
                 await self.control('DELETE', '/workers/' + identity)
             except (ClientError, OSError, web.HTTPException):
                 # Revoke display immediately; the broker lease also removes orphaned workers.
                 self.record(item.actor, item.target, identity, 'access.cleanup_pending', 'broker_unavailable')
-            self.sessions.pop(identity, None)
+            if item.proxy:
+                try:
+                    await asyncio.wait_for(item.proxy.wait_closed(), 2)
+                except (TimeoutError, OSError):
+                    pass
             self.record(item.actor, item.target, identity, 'access.stopped', reason)
 
     async def sweep_once(self):
