@@ -35,4 +35,8 @@ async def collect(item,allowed_hosts,credentials=None,previous=None,discovery=Fa
     elif method=='snmp':value=await snmp.probe(target,item['host'],item['monitor_port'],(credentials or {}).get('snmp',{}),categories,previous)
     elif method=='ssh':value=await ssh.probe(target,item['host'],item['monitor_port'],(credentials or {}).get('ssh',{}),categories,previous,item.get('vendor',''),item.get('model',''))
     else:return result(target,'inventory',error='adapter_not_configured')
+    if method=='snmp' and value.get('error')=='timeout':
+        availability=await icmp.probe(target+'_reachability',item['host'])
+        value['reachability_status']=availability['status']
+        value['reachability_method']='ICMP'
     return {**value,'host':item['host'],'display_name':item['name']}

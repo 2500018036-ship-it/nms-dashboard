@@ -368,6 +368,7 @@ class PlatformAPI:
                     ts,payload=by_target[key]
                     samples[key]=check(json.loads(payload),ts,time.time(),item['interval'] if key==target else self.owner.settings.poll_interval)
         value=summarize(item,target,samples)
+        value['reachability']={key:samples.get(target,{}).get(key) for key in ('reachability_status','reachability_method')}
         from app.dashboard.discovery import read
         discovered=read(self.store,item)
         if discovered:
