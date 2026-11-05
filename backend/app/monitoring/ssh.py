@@ -106,7 +106,8 @@ async def probe(target,host,port,credentials,categories,previous=None,vendor='',
     config=credentials if isinstance(credentials,dict) else {}
     username=config.get('username','');password=config.get('password','');key_type=config.get('host_key_type','');key_data=config.get('host_key_data','')
     if username.lower()=='root':return result(target,'SSH',error='readonly_account_required',host=host)
-    if not username or not password or key_type not in {'ssh-ed25519','ecdsa-sha2-nistp256'} or not key_data:
+    mode=config.get('auth_method','password')
+    if mode not in {'password','key'} or not username or (mode=='password' and not password) or (mode=='key' and not config.get('private_key')) or key_type not in {'ssh-ed25519','ecdsa-sha2-nistp256'} or not key_data:
         return result(target,'SSH',error='missing_ssh_credentials',host=host)
     try:
         import asyncssh
@@ -116,9 +117,13 @@ async def probe(target,host,port,credentials,categories,previous=None,vendor='',
         try:known_hosts=asyncssh.import_known_hosts(f'{pattern} {key_type} {key_data}')
         except (asyncssh.Error,ValueError):return result(target,'SSH',error='ssh_host_key_invalid',host=host)
         started=time.monotonic()
-        async with asyncssh.connect(host,port=port,username=username,password=password,known_hosts=known_hosts,
-            config=None,request_pty=False,client_keys=[],agent_path=None,preferred_auth='password',
-            password_auth=True,public_key_auth=False,kbdint_auth=False,connect_timeout=4,login_timeout=4,keepalive_interval=0) as connection:
+        keys=[]
+        if mode=='key':
+            try:keys=[asyncssh.import_private_key(config['private_key'],passphrase=config.get('key_passphrase') or None)]
+            except (ValueError,asyncssh.KeyImportError):return result(target,'SSH',error='ssh_private_key_invalid',host=host)
+        async with asyncssh.connect(host,port=port,username=username,password=password if mode=='password' else None,known_hosts=known_hosts,
+            config=None,request_pty=False,client_keys=keys,agent_path=None,preferred_auth='password' if mode=='password' else 'publickey',
+            password_auth=mode=='password',public_key_auth=mode=='key',kbdint_auth=False,connect_timeout=4,login_timeout=4,keepalive_interval=0) as connection:
             reply=await connection.run(_command(categories),check=False,timeout=8,encoding='utf-8')
         if getattr(reply,'exit_status',0)!=0:
             return result(target,'SSH pinned host key',error='ssh_command_failed',host=host)

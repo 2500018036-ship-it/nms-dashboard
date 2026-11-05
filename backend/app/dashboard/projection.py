@@ -27,7 +27,7 @@ def sample_time(row, saved):
     except (KeyError, ValueError, TypeError, AttributeError): return saved
 
 def check(row, saved, now, interval):
-    out = project(row, 'target,method,timestamp,host,display_name,address_source,previous_host,port,latency_ms,packet_loss_percent,http_status,query,cpu_percent,memory_percent,memory_total,memory_available,uptime_seconds,age_seconds,scan_truncated,management_configured,neighbor_read_status,embedding_supported,configuration_hash')
+    out = project(row, 'target,method,timestamp,host,display_name,reachability_status,reachability_method,address_source,previous_host,port,latency_ms,packet_loss_percent,http_status,query,cpu_percent,memory_percent,memory_total,memory_available,uptime_seconds,age_seconds,scan_truncated,management_configured,neighbor_read_status,embedding_supported,configuration_hash')
     out['sample_epoch'] = sample_time(row, saved)
     out['reported_status'] = row.get('status') if row.get('status') in STATUS else 'UNKNOWN'
     out['stale_after_seconds'] = max(120,min(10800,interval*3))

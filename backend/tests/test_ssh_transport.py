@@ -14,6 +14,7 @@ class SSHTransportTests(unittest.IsolatedAsyncioTestCase):
     async def test_pinned_readonly_transport_reads_real_procfs_and_rejects_other_key(self):
         password = secrets.token_urlsafe(24)
         key = asyncssh.generate_private_key('ssh-ed25519')
+        client_key = asyncssh.generate_private_key('ssh-ed25519')
         categories = list(ssh.COMMANDS)
         commands = []
 
@@ -23,6 +24,12 @@ class SSHTransportTests(unittest.IsolatedAsyncioTestCase):
 
             def password_auth_supported(self):
                 return True
+
+            def public_key_auth_supported(self):
+                return True
+
+            def validate_public_key(self, username, supplied):
+                return username == 'nms_readonly' and supplied == client_key.convert_to_public()
 
             def validate_password(self, username, supplied):
                 return username == 'nms_readonly' and secrets.compare_digest(supplied, password)
@@ -54,6 +61,11 @@ class SSHTransportTests(unittest.IsolatedAsyncioTestCase):
             rejected = await ssh.probe('transport', '127.0.0.1', listener.get_port(), wrong, categories)
             self.assertEqual(rejected['error'], 'ssh_host_key_mismatch')
             self.assertEqual(len(commands), 2)
+            key_credentials=dict(credentials,password='',auth_method='key',private_key=client_key.export_private_key().decode(),key_passphrase='')
+            with_key=await ssh.probe('transport','127.0.0.1',listener.get_port(),key_credentials,categories)
+            self.assertEqual(with_key['status'],'UP',with_key.get('error'))
+            self.assertGreater(with_key['memory_total'],0)
+            self.assertEqual(len(commands),3)
         finally:
             listener.close()
             await listener.wait_closed()

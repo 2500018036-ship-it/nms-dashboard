@@ -105,12 +105,25 @@ class CredentialVault:
         elif any(snmp[k] for k in ('community','username','auth_secret','privacy_secret')):
             raise ValueError('invalid_credentials')
         raw_ssh=body.get('ssh',cls.EMPTY['ssh'])
-        if not isinstance(raw_ssh,dict) or set(raw_ssh)!={'username','password','host_key_type','host_key_data'}:
+        base_ssh={'username','password','host_key_type','host_key_data'}
+        if not isinstance(raw_ssh,dict) or set(raw_ssh) not in (base_ssh,base_ssh|{'auth_method','private_key','key_passphrase'}):
             raise ValueError('invalid_credentials')
         ssh={key:cls._text(raw_ssh[key],8192 if key=='host_key_data' else 256 if key in {'username','host_key_type'} else 4096) for key in ('username','password','host_key_type','host_key_data')}
+        method=raw_ssh.get('auth_method','password')
+        if method not in {'password','key'}:raise ValueError('invalid_credentials')
+        if 'auth_method' in raw_ssh:
+            private=raw_ssh['private_key']
+            if not isinstance(private,str) or len(private)>16384 or '\x00' in private:raise ValueError('invalid_credentials')
+            ssh.update(auth_method=method,private_key=private,key_passphrase=cls._text(raw_ssh['key_passphrase'],4096))
+            if method=='key':
+                if ssh['password']:raise ValueError('invalid_credentials')
+                try:
+                    import asyncssh
+                    asyncssh.import_private_key(private,passphrase=ssh['key_passphrase'] or None)
+                except (ValueError,asyncssh.KeyImportError):raise ValueError('invalid_credentials') from None
         if ssh['host_key_type'] not in {'ssh-ed25519','ecdsa-sha2-nistp256'}:raise ValueError('invalid_credentials')
-        if ssh['username'] or ssh['password'] or ssh['host_key_data']:
-            if not ssh['username'] or not ssh['password'] or not ssh['host_key_data']:raise ValueError('invalid_credentials')
+        if ssh['username'] or ssh['password'] or ssh['host_key_data'] or method=='key':
+            if not ssh['username'] or (method=='password' and not ssh['password']) or not ssh['host_key_data']:raise ValueError('invalid_credentials')
             try:key_bytes=base64.b64decode(ssh['host_key_data']+'='*(-len(ssh['host_key_data'])%4),validate=True)
             except (ValueError,TypeError):raise ValueError('invalid_credentials') from None
             if len(key_bytes)<16:raise ValueError('invalid_credentials')
